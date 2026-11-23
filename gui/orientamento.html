@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAVI · orientamento</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #dcd8cf;
+    --certa: #1f7a4d; --smentita: #b3261e; --warn-bg: #fbeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 10px 16px; flex-wrap: wrap;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .08em; }
+  header span { color: var(--muted); }
+  header nav { margin-left: auto; display: flex; gap: 16px; flex-wrap: wrap; }
+  header a { color: inherit; }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section, aside > div { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-bottom: 20px; }
+  aside > div { position: sticky; top: 16px; }
+  h2 { font-size: 16px; margin: 0 0 4px; }
+  h2 small { font-weight: normal; color: var(--muted); }
+  .intro { color: var(--muted); font-size: 14px; margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  ul.items { list-style: none; padding: 0; margin: 0; }
+  ul.items li { padding: 7px 0; border-top: 1px solid var(--line); }
+  ul.items li:first-child { border-top: 0; }
+  ul.items a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted); cursor: pointer; }
+  ul.items .why { display: block; font-size: 13px; color: var(--muted); }
+  .tag { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 0 7px; margin-right: 6px; color: var(--muted); }
+  .q { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+  button { font: inherit; padding: 4px 12px; border-radius: 4px; border: 1px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer; }
+  button.small { font-size: 13px; padding: 1px 8px; background: #fff; color: var(--ink); border-color: var(--line); white-space: nowrap; }
+  .more { margin-top: 6px; font-size: 14px; background: none; border: 0; color: var(--ink); text-decoration: underline; padding: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 5px 6px; border-top: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
+  td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .numbers { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 10px; }
+  .numbers div strong { display: block; font-size: 22px; }
+  .guide { margin: 8px 0 0; padding-left: 18px; }
+  .warn-line { margin: 4px 0; font-size: 14px; color: var(--smentita); }
+  textarea, select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; }
+  .note { border-top: 1px solid var(--line); padding: 8px 0; font-size: 14px; }
+  .note.confermata { border-left: 3px solid var(--certa); padding-left: 8px; }
+  .note.scartata { opacity: .55; text-decoration: line-through; }
+  .note .acts { display: flex; gap: 6px; margin-top: 4px; }
+  .empty { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header><h1>MAVI</h1><span id="clone"></span>
+  <nav><a href="./">Grafo</a><strong>Orientamento</strong><a href="fonti.html">Cerca fonti</a><a href="revisione.html">Coda di revisione</a></nav></header>
+<main>
+  <div>
+    <section>
+      <h2 id="title"></h2>
+      <p class="intro">Questa pagina non risponde al posto tuo. Mette in fila ciò che l'archivio contiene, in base a regole
+         fisse e uguali per ogni tema, perché tu possa ragionarci: su cosa le fonti convergono, cosa è conteso, chi sono
+         gli attori, che cosa manca e da dove viene ciò che sai. Ogni voce porta al punto del grafo da cui nasce.</p>
+      <p id="goal"></p>
+      <div id="guide"></div>
+      <div class="numbers" id="numbers"></div>
+    </section>
+    <section><h2>Domande che vale la pena porsi <small id="n-domande"></small></h2>
+      <p class="intro">Ricavate dai contrasti, dalle lacune e dalla provenienza delle fonti. Annota quelle che vuoi seguire.</p>
+      <ul class="items" id="domande"></ul></section>
+    <section><h2>Ciò che è conteso <small id="n-conteso"></small></h2>
+      <p class="intro">Affermazioni contestate o smentite, versioni incompatibili, numeri che non tornano.</p>
+      <ul class="items" id="conteso"></ul></section>
+    <section><h2>Su cosa le fonti convergono <small id="n-assodato"></small></h2>
+      <p class="intro">Affermazioni segnate come certe, o sostenute da almeno due fonti indipendenti e non contestate.
+         Non significa che siano vere: significa che l'archivio, così com'è, non offre motivi per dubitarne.</p>
+      <ul class="items" id="assodato"></ul></section>
+    <section><h2>Gli attori <small id="n-attori"></small></h2>
+      <p class="intro">Le entità più collegate: quante affermazioni le riguardano, quante volte parlano in prima persona
+         e quante affermazioni contestano.</p>
+      <table><thead><tr><th>Entità</th><th>Tipo</th><th class="n">Affermazioni</th><th class="n">Parla</th><th class="n">Contesta</th></tr></thead>
+      <tbody id="attori"></tbody></table></section>
+    <section><h2>Che cosa manca <small id="n-lacune"></small></h2>
+      <p class="intro">Fonti uniche, giudizi senza voce, entità isolate, parti della scheda mai usate, squilibri nella provenienza.</p>
+      <ul class="items" id="lacune"></ul></section>
+    <section><h2>Da dove viene ciò che sai</h2>
+      <div id="provenienza"></div></section>
+  </div>
+  <aside><div>
+    <h2>Il tuo quaderno</h2>
+    <p class="intro">Le tue ipotesi, domande e note. Restano separate dalle affermazioni delle fonti: sono il tuo ragionamento.</p>
+    <select id="note-kind"><option value="ipotesi">Ipotesi</option><option value="domanda">Domanda</option><option value="nota">Nota</option></select>
+    <textarea id="note-text" rows="3" placeholder="Che cosa pensi? Che cosa vuoi verificare?" style="margin-top:6px"></textarea>
+    <p style="margin:6px 0 10px"><button id="note-add">Annota</button> <span id="note-msg" class="muted"></span></p>
+    <div id="notes"></div>
+  </div></aside>
+</main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `Errore ${r.status}`);
+  return data;
+}
+const fmt = d => d ? d.split("-").reverse().join("/") : "";
+
+// Un clic porta al grafo con l'affermazione (e) o l'entità (n) selezionata.
+function link(item, text) {
+  const target = item.id ? "e" + item.id : item.nodo ? "n" + item.nodo : null;
+  return target ? `<a data-go="${target}">${esc(text)}</a>` : esc(text);
+}
+document.addEventListener("click", ev => {
+  const a = ev.target.closest("[data-go]");
+  if (!a) return;
+  try { sessionStorage.setItem("mavi-select", a.dataset.go); } catch (e) {}
+  location.href = "./";
+});
+
+// Liste lunghe: le prime voci, poi «mostra tutte».
+function list(id, items, render, first = 8) {
+  const ul = document.getElementById(id);
+  document.getElementById("n-" + id).textContent = `(${items.length})`;
+  if (!items.length) { ul.innerHTML = `<li class="empty">Niente da segnalare, per ora.</li>`; return; }
+  const draw = n => {
+    ul.innerHTML = items.slice(0, n).map(x => `<li>${render(x)}</li>`).join("") +
+      (items.length > n ? `<li><button class="more">Mostra tutte (${items.length})</button></li>` : "");
+    ul.querySelector(".more")?.addEventListener("click", () => draw(items.length));
+  };
+  draw(first);
+}
+
+let data;
+async function load() {
+  data = await api("/api/orientation");
+  document.getElementById("clone").textContent = data.nome;
+  document.getElementById("title").textContent = data.nome;
+  document.getElementById("goal").innerHTML = data.obiettivo ? `<strong>Obiettivo:</strong> ${esc(data.obiettivo)}` : "";
+  document.getElementById("guide").innerHTML = data.domande_guida.length ?
+    `<strong>Le domande da cui sei partito</strong><ul class="guide">${data.domande_guida.map(d => `<li>${esc(d)}</li>`).join("")}</ul>` : "";
+  const n = data.numeri;
+  document.getElementById("numbers").innerHTML = [
+    [n.affermazioni, "affermazioni"], [n.entita, "entità"], [n.fonti, "fonti"],
+    [n.periodo ? `${fmt(n.periodo[0])} – ${fmt(n.periodo[1])}` : "—", "periodo coperto"]]
+    .map(([v, l]) => `<div><strong>${esc(v)}</strong><span class="muted">${l}</span></div>`).join("");
+
+  list("domande", data.domande, q => `<div class="q"><span>${link(q, q.testo)}</span>
+      <button class="small" data-note="${esc(q.testo)}">Annota</button></div>`);
+  list("conteso", data.conteso, c => `${link(c, c.testo)}<span class="why">${esc(c.perche)}</span>`);
+  list("assodato", data.assodato, a => `${link(a, a.testo)}<span class="why">${esc(a.perche)}</span>`);
+  document.getElementById("n-attori").textContent = `(${data.attori.length})`;
+  document.getElementById("attori").innerHTML = data.attori.map(a => `<tr><td>${link({ nodo: a.id }, a.nome)}</td>
+      <td class="muted">${esc(a.tipo)}</td><td class="n">${a.affermazioni}</td><td class="n">${a.come_voce || "—"}</td>
+      <td class="n">${a.contesta || "—"}</td></tr>`).join("");
+  list("lacune", data.lacune, l => `<span class="tag">${esc(l.tipo)}</span>${link(l, l.testo)}`);
+  const c = data.provenienza, labels = { editore: "Chi ha pubblicato", natura: "Natura", genere: "Genere", lingua: "Lingua", canale: "Canale" };
+  document.getElementById("provenienza").innerHTML = c.fonti ? `
+    <p class="muted">${c.fonti} ${c.fonti === 1 ? "fonte sostiene" : "fonti sostengono"} il grafo.</p>
+    ${c.avvisi.map(a => `<p class="warn-line">⚠ ${esc(a)}</p>`).join("")}
+    ${Object.entries(labels).map(([k, label]) => `<details><summary>${label} (${c.per[k].length})</summary>
+      <ul>${c.per[k].map(([v, n]) => `<li>${esc(v)} <span class="muted">· ${n}</span></li>`).join("")}</ul></details>`).join("")}`
+    : `<p class="empty">Nessuna fonte ancora: parti da «Cerca fonti».</p>`;
+  drawNotes(data.note);
+}
+
+function drawNotes(notes) {
+  document.getElementById("notes").innerHTML = notes.length ? notes.map(n => `
+    <div class="note ${n.state}"><span class="tag">${esc(n.kind)}</span>${esc(n.text)}
+      <div class="muted" style="font-size:12px">${fmt(n.created_at)}${n.state !== "aperta" ? " · " + n.state : ""}</div>
+      <div class="acts">${n.state === "aperta"
+        ? `<button class="small" data-state="confermata" data-id="${n.id}">Confermata</button>
+           <button class="small" data-state="scartata" data-id="${n.id}">Scartata</button>`
+        : `<button class="small" data-state="aperta" data-id="${n.id}">Riapri</button>`}</div></div>`).join("")
+    : `<p class="empty">Ancora nessuna nota.</p>`;
+}
+
+async function addNote(kind, text) {
+  const msg = document.getElementById("note-msg");
+  try {
+    await api("/api/notes", { tipo: kind, testo: text });
+    msg.textContent = "";
+    drawNotes((await api("/api/orientation")).note);
+    return true;
+  } catch (e) { msg.textContent = e.message; return false; }
+}
+document.getElementById("note-add").onclick = async () => {
+  const t = document.getElementById("note-text");
+  if (await addNote(document.getElementById("note-kind").value, t.value)) t.value = "";
+};
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest("[data-note]");
+  if (b) { if (await addNote("domanda", b.dataset.note)) { b.textContent = "Annotata"; b.disabled = true; } return; }
+  const s = ev.target.closest("[data-state]");
+  if (s) {
+    await api(`/api/notes/${s.dataset.id}/state`, { stato: s.dataset.state });
+    drawNotes((await api("/api/orientation")).note);
+  }
+});
+load().catch(e => document.querySelector("main").innerHTML = `<p class="warn-line">${esc(e.message)}</p>`);
+</script>
+</body>
+</html>

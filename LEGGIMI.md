@@ -50,6 +50,15 @@ la scheda (tipi di entità e relazioni), la correggi e crei il clone.
 Il pannello iniziale del grafo elenca cosa merita attenzione: conflitti aperti, contestazioni senza
 esito, affermazioni con una sola fonte, interpretazioni senza voce. Un clic porta all'affermazione.
 
+## Orientamento
+
+«Orientamento» (in alto nel grafo) non risponde al posto tuo: mette in fila ciò che l'archivio contiene
+perché tu possa ragionarci. Domande che vale la pena porsi, ciò che è conteso, su cosa le fonti convergono
+(non vuol dire che sia vero), gli attori, che cosa manca, da dove viene ciò che sai. Tutto è calcolato con
+regole fisse, uguali per ogni tema, e ogni voce porta al punto del grafo da cui nasce.
+A destra il tuo quaderno: ipotesi, domande e note, che puoi segnare come confermate o scartate.
+Restano separate dalle affermazioni delle fonti.
+
 ## Cerca fonti
 
 «Cerca fonti» (in alto nel grafo) cerca su più servizi aperti insieme, oppure legge i tuoi file (PDF, Word

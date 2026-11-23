@@ -9,8 +9,8 @@ import os
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from core import extraction, sources
-from core.database import (ROOT, SOURCE_GENRES, SOURCE_NATURES, change_status, connect, create_clone, graph, list_clones,
+from core import extraction, orientation, sources
+from core.database import (ROOT, SOURCE_GENRES, SOURCE_NATURES, add_note, change_status, notes, set_note_state, connect, create_clone, graph, list_clones,
                            merge_entities, read_profile, retract, validate_profile)
 
 ACTIVE = ROOT / "clones" / ".attivo"
@@ -222,6 +222,38 @@ def api_sources_file(payload: dict = Body(...)):
         raise HTTPException(400, f"«{name}»: {e}")
     except ValueError:
         raise HTTPException(400, f"«{name}»: file non leggibile.")
+
+
+@app.get("/api/orientation")
+def api_orientation():
+    conn = connect(CLONE)
+    try:
+        return dict(orientation.orientation(conn, CLONE), note=notes(conn))
+    finally:
+        conn.close()
+
+
+@app.post("/api/notes")
+def api_add_note(payload: dict = Body(...)):
+    conn = connect(CLONE)
+    try:
+        return {"id": add_note(conn, payload.get("tipo") or "nota", payload.get("testo"))}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    finally:
+        conn.close()
+
+
+@app.post("/api/notes/{nid}/state")
+def api_note_state(nid: int, payload: dict = Body(...)):
+    conn = connect(CLONE)
+    try:
+        set_note_state(conn, nid, payload.get("stato"))
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    finally:
+        conn.close()
 
 
 @app.get("/api/proposals")

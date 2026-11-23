@@ -632,4 +632,34 @@ assert tuple(conn.execute("SELECT channel, nature FROM sources WHERE label = 'Ap
 conn.close()
 ok("il motore distingue editore, canale e natura delle fonti, legge i file del PC e mostra la composizione dell'archivio")
 
+# 30. Orientamento: regole fisse, nessuna risposta; ogni voce porta al grafo; il quaderno resta separato
+from core.orientation import orientation
+from core.database import add_note, notes, set_note_state
+subprocess.run([sys.executable, "seed_carne_cavallo.py"], check=True, capture_output=True)
+conn = connect("carne_cavallo")
+o = orientation(conn, "carne_cavallo")
+conteso = {c["testo"] for c in o["conteso"]}
+assert "Carne equina nelle lasagne — proviene da → Romania" in conteso              # il governo rumeno la contesta
+assert not any(a["testo"] == "Carne equina nelle lasagne — proviene da → Romania" for a in o["assodato"])
+assert any(a["perche"] == "segnata come certa" for a in o["assodato"])
+assert o["attori"][0]["nome"] == "Spanghero" and o["attori"][0]["contesta"] == 1
+assert any(l["tipo"] == "una sola fonte" for l in o["lacune"]) and any(l["tipo"] == "provenienza" for l in o["lacune"])
+assert all(("id" in x) or ("nodo" in x) for x in o["conteso"] + o["assodato"])      # tutto si può verificare
+assert o["domande"] and all(q["testo"].endswith(("?", ")")) or "?" in q["testo"] for q in o["domande"])
+assert o["numeri"]["periodo"][0] <= o["numeri"]["periodo"][1]
+nid = add_note(conn, "ipotesi", "La carne è passata da più intermediari.")
+set_note_state(conn, nid, "scartata")
+assert notes(conn)[0]["state"] == "scartata"
+for bad in (lambda: add_note(conn, "verità", "x"), lambda: add_note(conn, "nota", " "),
+            lambda: set_note_state(conn, nid, "vera")):
+    try:
+        bad()
+        raise AssertionError("accettata una nota non valida")
+    except ValueError:
+        pass
+before = len(graph(conn)["edges"])
+assert len(graph(conn)["edges"]) == before                                          # le note non entrano nel grafo
+conn.close()
+ok("l'orientamento mostra conteso, convergenze, attori, lacune e domande; il quaderno resta separato dal grafo")
+
 print("\nTutti i controlli superati.")

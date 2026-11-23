@@ -51,6 +51,17 @@ CREATE TABLE IF NOT EXISTS relation_types (
     target      TEXT NOT NULL DEFAULT 'entita' CHECK (target IN ('entita', 'affermazione'))
 );
 
+-- Il quaderno della persona: ipotesi, domande e note sul clone. Non sono affermazioni del grafo:
+-- sono il suo ragionamento, che resta distinto da ciò che dicono le fonti.
+CREATE TABLE IF NOT EXISTS notes (
+    id          INTEGER PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK (kind IN ('ipotesi', 'domanda', 'nota')),
+    text        TEXT NOT NULL,
+    state       TEXT NOT NULL DEFAULT 'aperta' CHECK (state IN ('aperta', 'confermata', 'scartata')),
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS sources (
     id     INTEGER PRIMARY KEY,
     label  TEXT NOT NULL,
@@ -779,3 +790,29 @@ def weak_points(edges):
         {"titolo": "Interpretazioni senza voce", "spiegazione": "Giudizi o ipotesi di cui non si sa chi li sostiene.",
          "voci": items(voiceless)},
     ] if c["voci"]]
+
+
+def add_note(conn, kind, text):
+    text = (text or "").strip()
+    if not text:
+        raise ValueError("Scrivi il testo della nota.")
+    try:
+        nid = conn.execute("INSERT INTO notes (kind, text, created_at) VALUES (?, ?, ?)", (kind, text, today())).lastrowid
+    except sqlite3.IntegrityError:
+        raise ValueError("Tipo di nota non valido: ipotesi, domanda o nota.")
+    conn.commit()
+    return nid
+
+
+def set_note_state(conn, nid, state):
+    try:
+        n = conn.execute("UPDATE notes SET state = ?, updated_at = ? WHERE id = ?", (state, today(), nid)).rowcount
+    except sqlite3.IntegrityError:
+        raise ValueError("Stato non valido: aperta, confermata o scartata.")
+    if not n:
+        raise ValueError("Nota inesistente.")
+    conn.commit()
+
+
+def notes(conn):
+    return [dict(r) for r in conn.execute("SELECT * FROM notes ORDER BY state = 'aperta' DESC, id DESC")]
