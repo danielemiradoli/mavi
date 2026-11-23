@@ -27,5 +27,11 @@
       "chiave": "",
       "nota": "gratuita su https://openalex.org (articoli scientifici)"
     }
+  },
+  "limiti": {
+    "caratteri_per_testo": 15000,
+    "caratteri_per_blocco": 2500,
+    "attesa_massima_secondi": 60,
+    "nota": "limiti tecnici del modello e del piano gratuito: con un modello più capiente si possono alzare"
   }
 }

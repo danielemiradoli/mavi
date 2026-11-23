@@ -23,6 +23,7 @@
              border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
   #timebar input { flex: 1; max-width: 520px; accent-color: var(--ink); }
   #when { font-weight: 600; min-width: 150px; }
+  .warn-line { margin: 4px 0; font-size: 14px; color: var(--smentita); }
   #filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 6px 16px;
                border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
   #filterbar input, #filterbar select { font: inherit; padding: 2px 6px; border: 1px solid var(--line);
@@ -276,10 +277,23 @@ fetch("/api/graph").then(r => r.json()).then(data => {
           <p class="muted">${esc(w.spiegazione)}</p>
           <ul>${w.voci.map(v => `<li><a href="#" data-eid="${v.id}">${esc(v.testo)}</a></li>`).join("")}</ul>
         </details>`).join("") : ""}
+      ${data.composition.fonti ? composition(data.composition) : ""}
       ${data.retracted.length ? `<h3>Affermazioni ritirate (${data.retracted.length})</h3><ul>` +
         data.retracted.map(r => `<li>${esc(r.subject)} — ${esc(r.relation)} → ${esc(r.object)}<br>
           <span class="muted">${esc(fmtDate(r.retracted_at))}: ${esc(r.retracted_reason)}</span></li>`).join("") +
         "</ul>" : ""}`;
+  }
+
+  // Da dove viene ciò che si sa: MAVI non corregge le distorsioni, le mostra.
+  function composition(c) {
+    const labels = { editore: "Chi ha pubblicato", natura: "Natura", genere: "Genere", lingua: "Lingua", canale: "Canale" };
+    return `<h3>Da dove viene ciò che sai</h3>
+      <p class="muted">${c.fonti} ${c.fonti === 1 ? "fonte sostiene" : "fonti sostengono"} il grafo.</p>
+      ${c.avvisi.map(a => `<p class="warn-line">⚠ ${esc(a)}</p>`).join("")}
+      ${Object.entries(labels).map(([k, label]) => `
+        <details class="weak"><summary>${label} (${c.per[k].length})</summary>
+          <ul>${c.per[k].map(([v, n]) => `<li>${esc(v)} <span class="muted">· ${n}</span></li>`).join("")}</ul>
+        </details>`).join("")}`;
   }
 
   function showEdge(e) {
@@ -306,7 +320,9 @@ fetch("/api/graph").then(r => r.json()).then(data => {
       ${e.speakers.length ? `<h3>Chi la sostiene</h3><p>${e.speakers.map(v => esc(v.label)).join(" · ")}</p>` : ""}
       <h3>Fonte</h3>
       <p>${esc(e.source_label)}</p>
-      <p class="muted">${[e.source_kind, fmtDate(e.source_date)].filter(Boolean).map(esc).join(" · ")}</p>
+      <p class="muted">${[e.source_publisher, e.source_kind, e.source_nature && "fonte " + e.source_nature,
+                          fmtDate(e.source_date), e.source_language].filter(Boolean).map(esc).join(" · ")}</p>
+      ${e.source_channel ? `<p class="muted">Arrivata da: ${esc(e.source_channel)}</p>` : ""}
       ${e.reported_in ? `<p class="muted">Citazione riportata in: ${esc(e.reported_in)}</p>` : ""}
       ${e.source_url ? `<p><a href="${esc(e.source_url)}" target="_blank" rel="noopener">Apri il documento</a></p>` : ""}
       ${e.excerpt ? `<h3>Estratto</h3><blockquote>${esc(e.excerpt)}</blockquote>` : ""}

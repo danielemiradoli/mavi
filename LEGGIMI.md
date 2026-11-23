@@ -52,19 +52,30 @@ esito, affermazioni con una sola fonte, interpretazioni senza voce. Un clic port
 
 ## Cerca fonti
 
-«Cerca fonti» (in alto nel grafo) cerca su più fonti aperte insieme: scrivi che cosa vuoi capire, oppure
-parti da uno spunto (il nome del clone e le sue domande guida), scegli i risultati che ti interessano e
-mandali alla coda di revisione. MAVI legge il testo completo, il modello ne estrae le affermazioni e tu
-decidi cosa entra nel grafo. MAVI non risponde al posto tuo: ti aiuta a trovare cosa leggere e su cosa ragionare.
+«Cerca fonti» (in alto nel grafo) cerca su più servizi aperti insieme, oppure legge i tuoi file (PDF, Word
+.docx, pagine web salvate, testo). Scegli i testi che ti interessano e mandali alla coda di revisione: MAVI
+legge il testo completo, il modello ne estrae le affermazioni e tu decidi cosa entra nel grafo.
+MAVI non risponde al posto tuo: ti aiuta a trovare cosa leggere e su cosa ragionare.
 
+Regola: il motore conosce documenti, non servizi. Di ogni testo si registrano allo stesso modo, comunque
+arrivi: chi lo ha pubblicato, il genere, la natura (primaria: il documento o la testimonianza diretta;
+secondaria: chi la riporta o la analizza; terziaria: chi riassume altre fonti, come un'enciclopedia),
+la lingua e, a parte, il canale da cui è arrivato. Il canale non è mai la fonte: due articoli dello stesso
+editore trovati da servizi diversi restano una sola fonte. L'ordine dei risultati è quello di ciascun servizio.
+
+Servizi disponibili:
 - **Wikipedia** (italiano e inglese) e **GDELT** (notizie da tutto il mondo, ultimi tre mesi circa): senza chiave.
 - **Web (Tavily)**: articoli, documenti e siti ufficiali. Chiave gratuita su https://app.tavily.com
   (1000 ricerche al mese, senza carta di credito).
 - **OpenAlex**: articoli scientifici (solo il riassunto). Chiave gratuita su https://openalex.org.
 
 Le chiavi vanno in `impostazioni.json`, nella sezione `"fonti"` (vedi `impostazioni.esempio.json`).
-Di ogni testo si leggono al massimo i primi 15.000 caratteri; un testo lungo richiede qualche minuto,
-perché il modello gratuito ha un limite di parole al minuto e MAVI aspetta quando lo raggiunge.
+I limiti tecnici (caratteri letti per testo, dimensione dei blocchi, attesa quando il modello è saturo) sono
+nella sezione `"limiti"`: dipendono dal modello, non da MAVI.
+
+Il pannello iniziale del grafo mostra «Da dove viene ciò che sai»: le fonti contate per editore, natura,
+genere, lingua e canale, con un avviso quando dominano un solo editore, una sola lingua o un solo canale,
+o quando mancano le fonti primarie.
 
 ## Cerca e filtra
 

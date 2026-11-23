@@ -1,8 +1,13 @@
 """Fonti aperte: cercare testi su un tema e portarli nella coda di revisione.
 
-Ogni fonte (connettore) cerca e restituisce risultati nello stesso formato:
-    {"fonte", "titolo", "url", "data", "estratto", "tipo"}
-poi `fetch_text` recupera il testo completo da dare all'estrazione.
+Regola: il motore conosce solo documenti, non servizi. Ogni canale (un servizio di ricerca, un file
+del PC, un testo incollato) consegna lo stesso contratto:
+    {"titolo", "url", "data", "editore", "genere", "natura", "lingua", "canale", "estratto"}
+dove `editore` è chi ha pubblicato il testo (la fonte vera) e `canale` è solo la strada da cui è
+arrivato. Genere e natura usano la classificazione di MAVI (database.SOURCE_GENRES, SOURCE_NATURES):
+il canale li propone quando li conosce con certezza, altrimenti li lascia vuoti per la persona.
+L'ordine dei risultati è quello di ciascun servizio: la pagina lo dichiara.
+`fetch_text` recupera il testo completo da dare all'estrazione.
 
 - Wikipedia (italiano e inglese): enciclopedia, senza chiave.
 - GDELT: notizie da tutto il mondo degli ultimi tre mesi circa, senza chiave (una richiesta ogni 5 secondi).
@@ -18,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .extraction import settings
+from .extraction import limit, settings
 
 USER_AGENT = "MAVI/0.9 (prototipo di ricerca; https://github.com/danielemiradoli/mavi)"
 BASES = {                       # sostituibili nelle prove
@@ -27,7 +32,28 @@ BASES = {                       # sostituibili nelle prove
     "tavily": "https://api.tavily.com",
     "openalex": "https://api.openalex.org",
 }
-MAX_TEXT = 15000                # caratteri per fonte: oltre, il testo viene troncato (limiti del modello gratuito)
+LANGUAGES = {"it": "italiano", "en": "inglese", "fr": "francese", "de": "tedesco", "es": "spagnolo",
+             "pt": "portoghese", "nl": "olandese", "pl": "polacco", "ro": "rumeno", "ru": "russo",
+             "zh": "cinese", "ja": "giapponese", "ar": "arabo", "tr": "turco"}
+LANGUAGES.update({"italian": "italiano", "english": "inglese", "french": "francese", "german": "tedesco",
+                  "spanish": "spagnolo", "portuguese": "portoghese", "dutch": "olandese", "polish": "polacco",
+                  "romanian": "rumeno", "russian": "russo", "chinese": "cinese", "japanese": "giapponese",
+                  "arabic": "arabo", "turkish": "turco"})
+
+
+def language(code):
+    return LANGUAGES.get((code or "").strip().lower(), (code or "").strip().lower())
+
+
+def domain(url):
+    host = urllib.parse.urlparse(url).netloc.lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def item(**kw):
+    """Un risultato nel formato comune: i campi mancanti restano vuoti."""
+    base = dict.fromkeys(("titolo", "url", "data", "editore", "genere", "natura", "lingua", "canale", "estratto"), "")
+    return {**base, **{k: v for k, v in kw.items() if v is not None}}
 
 
 class SourceError(Exception):
@@ -69,10 +95,11 @@ def gdelt_date(s):
 # --- Ricerca -----------------------------------------------------------------------------------
 
 def parse_wikipedia(reply, lang):
-    return [{"fonte": f"Wikipedia ({lang})", "tipo": "enciclopedia",
-             "titolo": r["title"], "url": f"https://{lang}.wikipedia.org/wiki/{urllib.parse.quote(r['title'].replace(' ', '_'))}",
-             "data": (r.get("timestamp") or "")[:10], "estratto": clean(r.get("snippet")) + "…",
-             "lingua": lang}
+    # Una voce enciclopedica è per definizione una fonte terziaria.
+    return [item(titolo=r["title"], url=f"https://{lang}.wikipedia.org/wiki/{urllib.parse.quote(r['title'].replace(' ', '_'))}",
+                 data=(r.get("timestamp") or "")[:10], estratto=clean(r.get("snippet")) + "…",
+                 editore=f"Wikipedia ({lang})", genere="voce enciclopedica", natura="terziaria",
+                 lingua=language(lang), canale="Wikipedia")
             for r in reply.get("query", {}).get("search", [])]
 
 
@@ -87,10 +114,12 @@ def search_wikipedia(query, n=6, langs=("it", "en")):
 
 
 def parse_gdelt(reply):
-    return [{"fonte": f"GDELT · {a.get('domain', '')}", "tipo": "notizia", "titolo": a.get("title", ""),
-             "url": a.get("url", ""), "data": gdelt_date(a.get("seendate")),
-             "estratto": f"{a.get('sourcecountry', '')} · {a.get('language', '')}".strip(" ·"),
-             "lingua": a.get("language", "")}
+    # GDELT indicizza articoli di testate: genere noto, natura da valutare (un articolo può riportare un documento
+    # primario o commentarlo).
+    return [item(titolo=a.get("title", ""), url=a.get("url", ""), data=gdelt_date(a.get("seendate")),
+                 editore=a.get("domain") or domain(a.get("url", "")), genere="articolo",
+                 lingua=language(a.get("language")), canale="GDELT",
+                 estratto=a.get("sourcecountry", ""))
             for a in reply.get("articles", [])]
 
 
@@ -110,9 +139,9 @@ def search_gdelt(query, n=10):
 
 
 def parse_tavily(reply):
-    return [{"fonte": f"Web · {urllib.parse.urlparse(r['url']).netloc}", "tipo": "web", "titolo": r.get("title", ""),
-             "url": r["url"], "data": (r.get("published_date") or "")[:10],
-             "estratto": (r.get("content") or "")[:400]}
+    # Il web contiene di tutto: genere e natura li decide la persona.
+    return [item(titolo=r.get("title", ""), url=r["url"], data=(r.get("published_date") or "")[:10],
+                 editore=domain(r["url"]), canale="Tavily", estratto=(r.get("content") or "")[:400])
             for r in reply.get("results", [])]
 
 
@@ -139,11 +168,12 @@ def parse_openalex(reply):
         loc = w.get("primary_location") or {}
         venue = (loc.get("source") or {}).get("display_name") or ""
         text = abstract(w.get("abstract_inverted_index"))
-        out.append({"fonte": f"OpenAlex{' · ' + venue if venue else ''}", "tipo": "studio",
-                    "titolo": w.get("display_name") or w.get("title") or "",
-                    "url": w.get("doi") or loc.get("landing_page_url") or w.get("id", ""),
-                    "data": w.get("publication_date") or str(w.get("publication_year") or ""),
-                    "estratto": text[:400], "testo": text})
+        # Uno studio può essere originale (primaria) o una rassegna (secondaria): lo decide la persona.
+        out.append(dict(item(titolo=w.get("display_name") or w.get("title") or "",
+                             url=w.get("doi") or loc.get("landing_page_url") or w.get("id", ""),
+                             data=w.get("publication_date") or str(w.get("publication_year") or ""),
+                             editore=venue, genere="studio scientifico", lingua=language(w.get("language")),
+                             canale="OpenAlex", estratto=text[:400]), testo=text))
     return out
 
 
@@ -247,7 +277,56 @@ def fetch_text(item):
         text = fetch_wikipedia(item["url"])
     else:
         text = fetch_page(item["url"])
-    if len(text) > MAX_TEXT:
-        cut = text.rfind("\n\n", 0, MAX_TEXT)
-        return text[:cut if cut > MAX_TEXT // 2 else MAX_TEXT], len(text)
+    most = limit("caratteri_per_testo")
+    if len(text) > most:
+        cut = text.rfind("\n\n", 0, most)
+        return text[:cut if cut > most // 2 else most], len(text)
     return text, None
+
+
+# --- File del PC -----------------------------------------------------------------------------------
+
+def read_file(name, data):
+    """Testo di un file caricato dalla persona: PDF, Word (.docx), pagina web salvata, testo semplice."""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext == "pdf":
+        import io
+        from pypdf import PdfReader
+        try:
+            text = "\n\n".join(page.extract_text() or "" for page in PdfReader(io.BytesIO(data)).pages)
+        except Exception as e:                       # PDF danneggiato o protetto
+            raise SourceError(f"PDF non leggibile ({e})")
+        if not text.strip():
+            raise SourceError("il PDF non contiene testo (forse è una scansione: serve il riconoscimento dei caratteri)")
+        return text
+    if ext == "docx":
+        import io
+        import zipfile
+        from xml.etree import ElementTree
+        try:
+            xml = zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml")
+        except (zipfile.BadZipFile, KeyError):
+            raise SourceError("file Word non leggibile")
+        w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        paras = ["".join(t.text or "" for t in p.iter(w + "t")) for p in ElementTree.fromstring(xml).iter(w + "p")]
+        return "\n\n".join(p for p in paras if p.strip())
+    for encoding in ("utf-8-sig", "cp1252"):
+        try:
+            raw = data.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if ext in ("html", "htm"):
+        import trafilatura
+        return trafilatura.extract(raw, include_tables=True) or clean(raw)
+    if ext in ("txt", "md", "csv", ""):
+        return raw
+    raise SourceError(f"formato .{ext} non ancora supportato (PDF, Word .docx, HTML, testo)")
+
+
+def file_item(name, data):
+    text = read_file(name, data).strip()
+    if not text:
+        raise SourceError("il file è vuoto")
+    title = name.rsplit(".", 1)[0] if "." in name else name
+    return dict(item(titolo=title, url=f"file:{name}", canale="file del PC", estratto=text[:300] + "…"), testo=text)

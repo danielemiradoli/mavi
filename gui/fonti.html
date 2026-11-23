@@ -36,6 +36,10 @@
   .result .meta { font-size: 13px; color: var(--muted); }
   .result .snippet { font-size: 14px; margin: 2px 0 0; }
   .result.done { opacity: .55; }
+  .classify { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; font-size: 13px; align-items: center; }
+  .classify input, .classify select { font: inherit; padding: 1px 4px; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
+  .classify input { width: 170px; }
+  .classify .missing { border-color: var(--smentita); }
   .state { font-size: 13px; }
   .state.ok { color: var(--certa); } .state.err { color: var(--smentita); }
   .badge { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; margin-right: 6px; }
@@ -61,8 +65,20 @@
     <div id="connectors" class="connectors"></div>
   </section>
 
+  <section>
+    <h2>Dai tuoi file</h2>
+    <p class="muted">PDF, Word (.docx), pagine web salvate, testo. Restano sul tuo PC: MAVI ne legge il testo e lo
+       tratta come qualunque altra fonte.</p>
+    <input type="file" id="files" multiple accept=".pdf,.docx,.html,.htm,.txt,.md,.csv">
+    <span id="files-msg" class="muted"></span>
+  </section>
+
   <section id="results-section" hidden>
     <h2>Risultati <span id="count" class="muted"></span></h2>
+    <p class="muted">L'ordine è quello di ciascun servizio, non un giudizio di MAVI. Prima di mandare un testo alla
+       coda indica chi lo ha pubblicato, il genere e la natura: primaria (il documento o la testimonianza diretta),
+       secondaria (chi la riporta o la analizza), terziaria (chi riassume altre fonti). Servono a capire, dopo,
+       da dove viene ciò che sai.</p>
     <div id="errors"></div>
     <div id="results"></div>
   </section>
@@ -81,13 +97,14 @@ async function api(url, body) {
   return data;
 }
 
-let read = new Set(), results = [];
+let read = new Set(), results = [], genres = [], natures = {};
 const q = document.getElementById("q");
 
 (async () => {
   const info = await api("/api/sources");
   document.getElementById("clone").textContent = info.nome;
   read = new Set(info.gia_lette);
+  genres = info.generi; natures = info.nature;
   document.getElementById("connectors").innerHTML = info.fonti.map(f => `
     <label class="${f.attiva ? "" : "off"}" title="${esc(f.descrizione)}">
       <input type="checkbox" value="${f.id}" ${f.attiva ? "checked" : "disabled"}> ${esc(f.nome)}
@@ -107,12 +124,29 @@ document.getElementById("form").onsubmit = async ev => {
   go.disabled = true; go.textContent = "Cerco…";
   try {
     const r = await api("/api/sources/search", { domanda: q.value, fonti: which });
-    results = r.risultati;
+    results = results.filter(x => x.canale === "file del PC").concat(r.risultati);
     show(r.errori);
   } catch (e) {
     document.getElementById("errors").innerHTML = `<p class="errors">${esc(e.message)}</p>`;
     document.getElementById("results-section").hidden = false;
   } finally { go.disabled = false; go.textContent = "Cerca"; }
+};
+
+document.getElementById("files").onchange = async ev => {
+  const msg = document.getElementById("files-msg");
+  for (const file of ev.target.files) {
+    msg.textContent = `Leggo «${file.name}»…`;
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = "";
+      for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+      const r = await api("/api/sources/file", { nome: file.name, contenuto: btoa(bin) });
+      results = results.filter(x => x.url !== r.url).concat([r]);
+      msg.textContent = "";
+    } catch (e) { msg.textContent = e.message; }
+  }
+  ev.target.value = "";
+  show({});
 };
 
 function show(errors) {
@@ -125,17 +159,28 @@ function show(errors) {
     return `<div class="result ${done ? "done" : ""}" data-i="${i}">
       <input type="checkbox" ${done ? "disabled" : ""}>
       <div><h3><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></h3>
-        <div class="meta"><span class="badge">${esc(r.tipo)}</span>${esc(r.fonte)}${r.data ? " · " + esc(r.data) : ""}
+        <div class="meta">${[r.data, r.lingua, "via " + r.canale].filter(Boolean).map(esc).join(" · ")}
           ${done ? " · <strong>già nell'archivio</strong>" : ""}</div>
         ${r.estratto ? `<p class="snippet">${esc(r.estratto)}</p>` : ""}
+        ${done ? "" : `<div class="classify">
+          <input data-f="editore" value="${esc(r.editore)}" placeholder="chi lo ha pubblicato" title="Editore o autore">
+          <select data-f="genere"><option value="">genere?</option>${genres.map(g =>
+            `<option ${g === r.genere ? "selected" : ""}>${esc(g)}</option>`).join("")}</select>
+          <select data-f="natura"><option value="">natura?</option>${Object.entries(natures).map(([k, v]) =>
+            `<option value="${k}" title="${esc(v)}" ${k === r.natura ? "selected" : ""}>${k}</option>`).join("")}</select>
+        </div>`}
         <div class="state"></div></div></div>`;
   }).join("") : `<p class="muted">Nessun risultato. Prova con parole diverse, o in inglese.</p>`;
-  document.querySelectorAll(".result input").forEach(c => c.onchange = updateBar);
+  document.querySelectorAll(".result > input").forEach(c => c.onchange = updateBar);
+  document.querySelectorAll(".classify [data-f]").forEach(f => {
+    const mark = () => f.classList.toggle("missing", !f.value);
+    f.addEventListener("input", mark); mark();
+  });
   updateBar();
 }
 
 function updateBar() {
-  const n = document.querySelectorAll(".result input:checked").length;
+  const n = document.querySelectorAll(".result > input:checked").length;
   const add = document.getElementById("add");
   document.getElementById("bar").hidden = !n && !document.getElementById("progress").textContent;
   add.hidden = !n;
@@ -145,11 +190,12 @@ function updateBar() {
 // Un testo alla volta: il modello gratuito ha un limite di parole al minuto.
 document.getElementById("add").onclick = async () => {
   const add = document.getElementById("add"), progress = document.getElementById("progress");
-  const chosen = [...document.querySelectorAll(".result input:checked")].map(c => c.closest(".result"));
+  const chosen = [...document.querySelectorAll(".result > input:checked")].map(c => c.closest(".result"));
   add.disabled = true;
   let total = 0;
   for (const [k, el] of chosen.entries()) {
-    const r = results[el.dataset.i], state = el.querySelector(".state");
+    const r = { ...results[el.dataset.i] }, state = el.querySelector(".state");
+    el.querySelectorAll("[data-f]").forEach(f => r[f.dataset.f] = f.value.trim());
     progress.textContent = `Leggo ${k + 1} di ${chosen.length}: «${r.titolo}»… (un testo lungo richiede qualche minuto)`;
     state.className = "state muted"; state.textContent = "In lettura…";
     try {
@@ -162,6 +208,7 @@ document.getElementById("add").onclick = async () => {
       el.classList.add("done");
       el.querySelector("input").checked = false;
       el.querySelector("input").disabled = true;
+      el.querySelector(".classify")?.remove();
     } catch (e) {
       state.className = "state err"; state.textContent = e.message;
     }

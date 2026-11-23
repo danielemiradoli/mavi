@@ -10,7 +10,7 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from core import extraction, sources
-from core.database import (ROOT, change_status, connect, create_clone, graph, list_clones,
+from core.database import (ROOT, SOURCE_GENRES, SOURCE_NATURES, change_status, connect, create_clone, graph, list_clones,
                            merge_entities, read_profile, retract, validate_profile)
 
 ACTIVE = ROOT / "clones" / ".attivo"
@@ -148,7 +148,8 @@ def api_extract(payload: dict = Body(...)):
     conn = connect(CLONE)
     try:
         n = extraction.extract(conn, CLONE, text, label, payload.get("tipo"), payload.get("data"),
-                               payload.get("url"), payload.get("voce"), payload.get("tipo_voce"))
+                               payload.get("url"), payload.get("voce"), payload.get("tipo_voce"),
+                               meta={k: payload.get(k) for k in ("editore", "natura", "lingua")})
         return {"proposte": n}
     except ValueError as e:
         conn.rollback()
@@ -167,7 +168,8 @@ def api_sources():
         profile = read_profile(CLONE)
         known = [r[0] for r in conn.execute("SELECT url FROM sources WHERE url IS NOT NULL")]
         return {"fonti": sources.available(), "nome": profile["nome"],
-                "domande": profile.get("domande", []), "gia_lette": known}
+                "domande": profile.get("domande", []), "gia_lette": known,
+                "generi": SOURCE_GENRES, "nature": SOURCE_NATURES}
     finally:
         conn.close()
 
@@ -192,8 +194,10 @@ def api_sources_add(item: dict = Body(...)):
         raise HTTPException(502, f"«{item['titolo']}»: {e}")
     conn = connect(CLONE)
     try:
-        label = f'{item["titolo"]} ({item.get("fonte", "web")})'
-        n = extraction.extract(conn, CLONE, text, label, item.get("tipo"), item.get("data") or None, item["url"])
+        # Il titolo identifica il documento; editore e canale restano campi distinti.
+        n = extraction.extract(conn, CLONE, text, item["titolo"], item.get("genere") or None,
+                               item.get("data") or None, item["url"],
+                               meta={k: item.get(k) for k in ("editore", "canale", "natura", "lingua")})
         return {"proposte": n, "troncato_da": full, "caratteri": len(text)}
     except ValueError as e:
         conn.rollback()
@@ -203,6 +207,21 @@ def api_sources_add(item: dict = Body(...)):
         raise HTTPException(502, str(e))
     finally:
         conn.close()
+
+
+@app.post("/api/sources/file")
+def api_sources_file(payload: dict = Body(...)):
+    """Un file del PC (PDF, Word, HTML, testo), inviato dalla pagina in base64: diventa un risultato
+    come quelli dei servizi di ricerca, da classificare e mandare alla coda."""
+    import base64
+    name = (payload.get("nome") or "").strip()
+    try:
+        data = base64.b64decode(payload.get("contenuto") or "")
+        return sources.file_item(name, data)
+    except sources.SourceError as e:
+        raise HTTPException(400, f"«{name}»: {e}")
+    except ValueError:
+        raise HTTPException(400, f"«{name}»: file non leggibile.")
 
 
 @app.get("/api/proposals")

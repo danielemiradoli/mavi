@@ -42,6 +42,8 @@ DEFAULT_SETTINGS = {
     "fornitore": "ollama",
     "fornitori": {"ollama": {"tipo": "ollama", "indirizzo": "http://localhost:11434", "modello": "gemma3:4b"}},
 }
+# Limiti tecnici (dipendono dal modello e dal piano del servizio): impostazioni, non regole del modello dati.
+LIMITS = {"caratteri_per_testo": 15000, "caratteri_per_blocco": 2500, "attesa_massima_secondi": 60}
 FIELDS = ("soggetto", "tipo_soggetto", "relazione", "oggetto", "tipo_oggetto",
           "tipo_affermazione", "data", "estratto", "voce", "tipo_voce", "valore")
 
@@ -229,6 +231,11 @@ def settings():
     return DEFAULT_SETTINGS
 
 
+def limit(name):
+    """Un limite tecnico: quello di impostazioni.json («limiti»), altrimenti il predefinito."""
+    return int(settings().get("limiti", {}).get(name, LIMITS[name]))
+
+
 def provider(name=None):
     """Il fornitore da usare: quello indicato, oppure quello scelto in impostazioni.json."""
     s = settings()
@@ -272,7 +279,8 @@ def post_patient(url, body, headers=None, tries=3):
             if e.code != 429 or attempt == tries - 1:
                 raise
             wait = e.headers.get("retry-after") if e.headers else None
-            time.sleep(min(float(wait) if wait and wait.replace(".", "", 1).isdigit() else 20, 60))
+            time.sleep(min(float(wait) if wait and wait.replace(".", "", 1).isdigit() else 20,
+                           limit("attesa_massima_secondi")))
 
 
 def ask_model(system, user, schema, prov=None):
@@ -314,8 +322,9 @@ def ask_model(system, user, schema, prov=None):
         raise ModelError(f'{describe(prov)} non risponde su {prov["indirizzo"]} ({e}). {where}')
 
 
-def chunks(text, size=2500):
+def chunks(text, size=None):
     """Divide il testo in blocchi di paragrafi interi, per non superare la memoria del modello."""
+    size = size or limit("caratteri_per_blocco")
     parts, current = [], ""
     for para in re.split(r"\n\s*\n", text.strip()):
         if current and len(current) + len(para) > size:
@@ -458,11 +467,14 @@ def check_about(conn, profile, text, raw, claims, chunk_ids):
 
 
 def extract(conn, clone_name, text, label, kind=None, date=None, url=None,
-            speaker=None, speaker_type=None, ask=None):
+            speaker=None, speaker_type=None, ask=None, meta=None):
     """Registra il testo come fonte, chiede al modello le asserzioni e le mette in coda.
     Restituisce il numero di proposte create."""
     profile = read_profile(clone_name)
-    source_id = add_source(conn, label, kind or None, normalize_date(date), url or None)
+    meta = meta or {}
+    source_id = add_source(conn, label, kind or None, normalize_date(date), url or None,
+                           publisher=meta.get("editore"), channel=meta.get("canale"),
+                           nature=meta.get("natura"), language=meta.get("lingua"))
     if speaker:
         found = match_entity(conn, speaker)
         if not found and not speaker_type:

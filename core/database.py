@@ -363,11 +363,34 @@ def format_value(low, high, unit):
     return f"{v} {unit}" if unit else v
 
 
+# Classificazione delle fonti: nostra e universale, indipendente dai servizi da cui arrivano i testi.
+SOURCE_NATURES = {
+    "primaria": "il documento o la testimonianza diretta (atto, dati, dichiarazione, studio originale)",
+    "secondaria": "chi riporta, commenta o analizza fonti primarie (articolo, saggio, rassegna)",
+    "terziaria": "chi riassume altre fonti (enciclopedia, manuale, voce di dizionario)",
+}
+SOURCE_GENRES = ["articolo", "comunicato", "dichiarazione", "intervista", "documento ufficiale", "atto giudiziario",
+                 "dati", "studio scientifico", "saggio o libro", "voce enciclopedica", "lettera o diario",
+                 "testimonianza", "pagina web", "post social", "altro"]
+SOURCE_FIELDS = ("publisher", "channel", "nature", "language")
+OLD_GENRES = {"enciclopedia": "voce enciclopedica", "sentenza": "atto giudiziario", "rapporto": "documento ufficiale",
+              "sito web": "pagina web", "web": "pagina web", "catalogo": "saggio o libro", "notizia": "articolo",
+              "studio": "studio scientifico"}
+
+
 def upgrade(conn):
     """Aggiorna i database creati con versioni precedenti di MAVI."""
     if "reported_in" not in [r[1] for r in conn.execute("PRAGMA table_info(sources)")]:
         # Una citazione dentro un articolo è una fonte a sé, «riportata in» quell'articolo.
         conn.execute("ALTER TABLE sources ADD COLUMN reported_in INTEGER REFERENCES sources(id)")
+    source_columns = [r[1] for r in conn.execute("PRAGMA table_info(sources)")]
+    for col in SOURCE_FIELDS:
+        # Chi ha pubblicato, da quale canale è arrivato il testo, natura (primaria/secondaria/terziaria), lingua.
+        if col not in source_columns:
+            conn.execute(f"ALTER TABLE sources ADD COLUMN {col} TEXT")
+    # Generi di versioni precedenti (o nati dai servizi di ricerca) ricondotti alla classificazione di MAVI.
+    for old, new in OLD_GENRES.items():
+        conn.execute("UPDATE sources SET kind = ? WHERE kind = ?", (new, old))
     columns = [r[1] for r in conn.execute("PRAGMA table_info(assertions)")]
     if "retracted_at" not in columns:
         conn.execute("ALTER TABLE assertions ADD COLUMN retracted_at TEXT")
@@ -410,10 +433,16 @@ def sync_profile(conn, profile):
     conn.commit()
 
 
-def add_source(conn, label, kind=None, date=None, url=None):
+def add_source(conn, label, kind=None, date=None, url=None, publisher=None, channel=None,
+               nature=None, language=None):
+    """Una fonte. `kind` è il genere del documento; `publisher` chi lo ha pubblicato; `channel` la strada
+    da cui è arrivato (a mano, un file, un servizio di ricerca): il canale non è mai la fonte."""
+    if nature and nature not in SOURCE_NATURES:
+        raise ValueError(f"Natura della fonte «{nature}» non valida: {', '.join(SOURCE_NATURES)}.")
     cur = conn.execute(
-        "INSERT INTO sources (label, kind, date, url) VALUES (?, ?, ?, ?)",
-        (label, kind, date, url),
+        "INSERT INTO sources (label, kind, date, url, publisher, channel, nature, language) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (label, kind, date, url, publisher or None, channel or None, nature or None, language or None),
     )
     return cur.lastrowid
 
@@ -588,7 +617,14 @@ def graph(conn):
                   rt.definition AS relation_definition,
                   s.label AS subject, o.label AS object,
                   src.label AS source_label, src.kind AS source_kind,
-                  src.date AS source_date, src.url AS source_url, rep.label AS reported_in
+                  src.date AS source_date, src.url AS source_url, rep.label AS reported_in,
+                  COALESCE(src.publisher, rep.publisher) AS source_publisher,
+                  COALESCE(src.nature, rep.nature) AS source_nature,
+                  COALESCE(src.channel, rep.channel) AS source_channel,
+                  COALESCE(src.language, rep.language) AS source_language,
+                  -- La radice: per l'indipendenza contano l'editore (o il documento) da cui tutto proviene.
+                  CASE WHEN rep.id IS NOT NULL THEN COALESCE(rep.publisher, rep.label)
+                       ELSE COALESCE(src.publisher, src.label) END AS source_root
            FROM assertions a
            JOIN relation_types rt ON rt.name = a.relation
            JOIN entities s ON s.id = a.subject_id
@@ -647,7 +683,42 @@ def graph(conn):
 
     result = {"nodes": nodes, "edges": list(edges.values()), "dates": dates, "retracted": retracted}
     result["weak"] = weak_points(result["edges"])
+    result["composition"] = composition(conn)
     return result
+
+
+def composition(conn):
+    """Da dove viene ciò che si sa: le fonti (le radici, non le citazioni al loro interno) che
+    sostengono almeno un'affermazione nel grafo, contate per editore, genere, natura, lingua e canale.
+    Gli avvisi rendono visibili le distorsioni: MAVI non le corregge, le mostra."""
+    rows = conn.execute(
+        """SELECT DISTINCT root.id, COALESCE(root.publisher, root.label) AS publisher, root.kind, root.nature,
+                  root.language, root.channel
+           FROM assertions a JOIN sources src ON src.id = a.source_id
+           JOIN sources root ON root.id = COALESCE(src.reported_in, src.id)
+           WHERE a.retracted_at IS NULL""").fetchall()
+    n = len(rows)
+    count = lambda key, empty: sorted(
+        {v: sum(1 for r in rows if (r[key] or empty) == v) for v in {r[key] or empty for r in rows}}.items(),
+        key=lambda kv: (-kv[1], kv[0]))
+    by = {"editore": count("publisher", "non indicato"), "genere": count("kind", "non indicato"),
+          "natura": count("nature", "non classificata"), "lingua": count("language", "non indicata"),
+          "canale": count("channel", "inserita a mano")}
+    warnings = []
+    if n:
+        natures = dict(by["natura"])
+        if natures.get("non classificata", 0) > n / 2:
+            warnings.append("Più di metà delle fonti non è classificata come primaria, secondaria o terziaria.")
+        elif not natures.get("primaria"):
+            warnings.append("Nessuna fonte primaria: tutto ciò che sai è riportato da altri.")
+        if n >= 4 and by["editore"][0][1] / n >= 0.5:
+            warnings.append(f"Metà delle fonti o più viene da un solo editore: {by['editore'][0][0]}.")
+        known = [l for l, _ in by["lingua"] if l != "non indicata"]
+        if n >= 3 and len(known) == 1:
+            warnings.append(f"Tutte le fonti di lingua nota sono in {known[0]}.")
+        if n >= 3 and len(by["canale"]) == 1 and by["canale"][0][0] != "inserita a mano":
+            warnings.append(f"Tutte le fonti sono arrivate dallo stesso canale: {by['canale'][0][0]}.")
+    return {"fonti": n, "per": by, "avvisi": warnings}
 
 
 def weak_points(edges):
@@ -663,7 +734,7 @@ def weak_points(edges):
 
     single = []
     for group in by_triple.values():
-        roots = {e["reported_in"] or e["source_label"] for e in group}
+        roots = {e["source_root"] for e in group}
         if len(roots) == 1:
             single += [e for e in group if e["status"] == "da_verificare"]
 

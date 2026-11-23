@@ -49,9 +49,11 @@
        nel grafo finché non lo approvi qui sotto.</p>
     <div class="grid">
       <div><label for="titolo">Titolo della fonte *</label><input id="titolo" placeholder="es. Reuters, «Nestlé ritira…»"></div>
-      <div><label for="tipo">Tipo di fonte</label>
-        <select id="tipo"><option>articolo</option><option>comunicato</option><option>dichiarazione</option>
-          <option>intervista</option><option>rapporto</option><option>sentenza</option><option>altro</option></select></div>
+      <div><label for="editore">Chi lo ha pubblicato</label><input id="editore" placeholder="es. Reuters, Ministero della Salute"></div>
+      <div><label for="tipo">Genere</label><select id="tipo"><option value="">—</option></select></div>
+      <div><label for="natura">Natura della fonte</label><select id="natura" title="primaria: il documento o la testimonianza diretta; secondaria: chi la riporta o la analizza; terziaria: chi riassume altre fonti">
+        <option value="">—</option><option>primaria</option><option>secondaria</option><option>terziaria</option></select></div>
+      <div><label for="lingua">Lingua</label><input id="lingua" placeholder="es. italiano"></div>
       <div><label for="data">Data della fonte</label><input id="data" placeholder="es. 2026-09-17 o 17/09/2026"></div>
       <div><label for="url">Indirizzo web</label><input id="url" placeholder="https://…"></div>
       <div><label for="voce">Chi parla <span class="tag" id="voce-tag"></span></label>
@@ -275,15 +277,22 @@ async function loadQueue() {
 document.getElementById("voce").addEventListener("input", e =>
   tagFor(e.target, document.getElementById("voce-tag")));
 
+// I generi di fonte sono la classificazione di MAVI, uguale per ogni canale.
+api("/api/sources").then(info => {
+  document.getElementById("tipo").insertAdjacentHTML("beforeend",
+    info.generi.map(g => `<option>${esc(g)}</option>`).join(""));
+}).catch(() => {});
+
 document.getElementById("estrai").onclick = async () => {
   const btn = document.getElementById("estrai"), status = document.getElementById("status");
   const val = id => document.getElementById(id).value.trim();
   btn.disabled = true;
   status.className = "muted";
-  status.textContent = "Estrazione in corso… con un modello locale può servire qualche minuto.";
+  status.textContent = "Estrazione in corso… un testo lungo può richiedere qualche minuto.";
   try {
     const r = await api("/api/extract", { titolo: val("titolo"), tipo: val("tipo"), data: val("data"),
-      url: val("url"), voce: val("voce"), tipo_voce: val("tipo_voce"), testo: val("testo") });
+      url: val("url"), voce: val("voce"), tipo_voce: val("tipo_voce"), testo: val("testo"),
+      editore: val("editore"), natura: val("natura"), lingua: val("lingua") });
     status.textContent = `${r.proposte} proposte aggiunte alla coda.`;
     document.getElementById("testo").value = "";
     await refresh();

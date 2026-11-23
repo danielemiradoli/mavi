@@ -555,10 +555,14 @@ wiki = sources.parse_wikipedia({"query": {"search": [{"title": "Scandalo della c
                                                       "snippet": "lo <span class=\"m\">scandalo</span>", "timestamp": "2026-10-01T10:00:00Z"}]}}, "it")
 assert wiki[0]["url"] == "https://it.wikipedia.org/wiki/Scandalo_della_carne_di_cavallo"
 assert wiki[0]["estratto"] == "lo scandalo…" and wiki[0]["data"] == "2026-10-01"
-news = sources.parse_gdelt({"articles": [{"url": "https://x.it/a", "title": "T", "seendate": "20260917T120000Z", "domain": "x.it"}]})
-assert news[0]["data"] == "2026-09-17" and news[0]["tipo"] == "notizia"
+assert (wiki[0]["editore"], wiki[0]["natura"], wiki[0]["lingua"], wiki[0]["canale"]) == \
+       ("Wikipedia (it)", "terziaria", "italiano", "Wikipedia")
+news = sources.parse_gdelt({"articles": [{"url": "https://x.it/a", "title": "T", "seendate": "20260917T120000Z",
+                                          "domain": "x.it", "language": "Italian"}]})
+assert news[0]["data"] == "2026-09-17" and news[0]["genere"] == "articolo" and news[0]["natura"] == ""
+assert news[0]["editore"] == "x.it" and news[0]["canale"] == "GDELT" and news[0]["lingua"] == "italiano"
 web = sources.parse_tavily({"results": [{"title": "T", "url": "https://www.bbc.com/n", "content": "c", "published_date": None}]})
-assert web[0]["fonte"] == "Web · www.bbc.com" and web[0]["data"] == ""
+assert web[0]["editore"] == "bbc.com" and web[0]["canale"] == "Tavily" and web[0]["genere"] == ""
 paper = sources.parse_openalex({"results": [{"display_name": "Food fraud", "doi": "https://doi.org/10.1/x",
                                              "publication_year": 2019, "abstract_inverted_index": {"fraud": [1], "Food": [0]}}]})
 assert paper[0]["testo"] == "Food fraud" and paper[0]["data"] == "2019"
@@ -568,10 +572,64 @@ assert sources.fetch_wikipedia("https://it.wikipedia.org/wiki/Prova") == "Intro.
 sources.http = real_http
 long_text = ("Paragrafo di prova. " * 40 + "\n\n") * 40
 text, full = sources.fetch_text({"url": "https://doi.org/x", "testo": long_text})
-assert len(text) <= sources.MAX_TEXT and full == len(long_text) and text.endswith("prova. ")
+assert len(text) <= extraction.limit("caratteri_per_testo") and full == len(long_text) and text.endswith("prova. ")
 assert sources.fetch_text({"url": "u", "testo": "breve"}) == ("breve", None)
 _, errors = sources.search("x", ["tavily"]) if not sources.keys().get("tavily", {}).get("chiave") else ([], {"Web (Tavily)": "-"})
 assert "Web (Tavily)" in errors                            # senza chiave la fonte si segnala, non blocca
 ok("le fonti aperte (Wikipedia, GDELT, web, OpenAlex) danno risultati uniformi e i testi lunghi si troncano")
+
+# 29. Il motore conosce documenti, non servizi: editore, canale e natura sono distinti, e l'archivio
+#     mostra da dove viene ciò che sa
+import base64, io, zipfile
+from core.database import SOURCE_NATURES, add_source
+docx = io.BytesIO()
+with zipfile.ZipFile(docx, "w") as z:
+    w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    z.writestr("word/document.xml", f'<w:document xmlns:w="{w}"><w:body><w:p><w:r><w:t>Primo </w:t></w:r>'
+                                    f'<w:r><w:t>paragrafo.</w:t></w:r></w:p><w:p><w:r><w:t>Secondo.</w:t></w:r></w:p></w:body></w:document>')
+assert sources.read_file("verbale.docx", docx.getvalue()) == "Primo paragrafo.\n\nSecondo."
+assert sources.read_file("nota.txt", "Città più caffè".encode("cp1252")) == "Città più caffè"
+f = sources.file_item("Verbale del consiglio.docx", docx.getvalue())
+assert (f["titolo"], f["canale"], f["url"], f["natura"]) == ("Verbale del consiglio", "file del PC", "file:Verbale del consiglio.docx", "")
+try:
+    sources.read_file("foto.jpg", b"x")
+    raise AssertionError("letto un formato non supportato")
+except sources.SourceError:
+    pass
+
+subprocess.run([sys.executable, "seed_carne_cavallo.py"], check=True, capture_output=True)
+conn = connect("carne_cavallo")
+try:
+    add_source(conn, "x", nature="quaternaria")
+    raise AssertionError("accettata una natura inventata")
+except ValueError:
+    pass
+# Due articoli dello stesso editore non sono due fonti indipendenti; un terzo editore sì.
+TESTO_A = "Secondo Le Monde, Comigel fornisce Findus anche in Svezia."
+def model_one(system, user, schema):
+    return {"nuove_relazioni": [], "prese_di_posizione": [], "affermazioni": [
+        {"soggetto": "Comigel", "tipo_soggetto": "azienda", "relazione": "fornisce", "oggetto": "Spanghero",
+         "tipo_oggetto": "azienda", "tipo_affermazione": "documentato", "data": "", "voce": "", "tipo_voce": "",
+         "valore": "", "estratto": "Comigel fornisce Findus"}]}
+for title, publisher in (("Articolo 1", "Le Monde"), ("Articolo 2", "Le Monde")):
+    extraction.extract(conn, "carne_cavallo", TESTO_A, title, "articolo", ask=model_one,
+                       meta={"editore": publisher, "canale": "GDELT", "natura": "secondaria", "lingua": "francese"})
+for p in extraction.pending(conn):
+    extraction.approve(conn, p["id"], p["data"])
+g = graph(conn)
+single = {w["titolo"]: w["voci"] for w in g["weak"]}["Una sola fonte"]
+assert any("Comigel — fornisce → Spanghero" in v["testo"] for v in single)          # stesso editore: una sola fonte
+edge = next(e for e in g["edges"] if e["subject"] == "Comigel" and e["object"] == "Spanghero")
+assert (edge["source_publisher"], edge["source_channel"], edge["source_nature"]) == ("Le Monde", "GDELT", "secondaria")
+assert edge["source_label"] == "Articolo 1"                                          # il canale non entra nel titolo
+comp = g["composition"]
+assert ("Le Monde", 2) in comp["per"]["editore"] and ("GDELT", 2) in comp["per"]["canale"]
+assert ("inserita a mano", comp["fonti"] - 2) in comp["per"]["canale"]
+assert any("non è classificata" in a for a in comp["avvisi"])                        # i dati di prova non lo sono
+# Lo stesso motore con un testo incollato a mano: nessun canale, la fonte resta completa.
+extraction.extract(conn, "carne_cavallo", TESTO_A, "Appunti", ask=model_one, meta={"editore": "Daniele", "natura": "primaria"})
+assert tuple(conn.execute("SELECT channel, nature FROM sources WHERE label = 'Appunti'").fetchone()) == (None, "primaria")
+conn.close()
+ok("il motore distingue editore, canale e natura delle fonti, legge i file del PC e mostra la composizione dell'archivio")
 
 print("\nTutti i controlli superati.")
