@@ -30,6 +30,10 @@
   .card { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
   .card.stance { border-left: 4px solid var(--ink, #1d1d1b); }
   .card .target { margin: 0 0 8px; }
+  .bulk { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 12px; padding: 10px;
+          background: var(--bg); border-radius: 6px; position: sticky; top: 0; z-index: 2; }
+  .pick { float: right; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; }
+  .pick input { width: auto; }
   .card .src { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
   .warn { background: var(--warn-bg); border-left: 3px solid var(--smentita); padding: 6px 10px; margin-bottom: 10px; font-size: 14px; }
   .warn p { margin: 2px 0; }
@@ -81,6 +85,12 @@
       <input id="nuovo-tipo" placeholder="nome del tipo" style="max-width:220px">
       <button class="secondary" id="aggiungi-tipo">Aggiungi alla scheda</button>
       <span class="error" id="tipo-errore"></span></p>
+    <div id="bulk" class="bulk" hidden>
+      <button id="approve-clean"></button>
+      <button class="secondary" id="approve-picked"></button>
+      <button class="secondary" id="reject-picked"></button>
+      <span id="bulk-msg" class="muted"></span>
+    </div>
     <div id="queue"></div>
   </section>
 </main>
@@ -151,12 +161,21 @@ function stanceCard(p) {
   return el;
 }
 
+// Approva una proposta con i campi così come sono nella scheda (anche se corretti a mano).
+async function approveCard(el, p) {
+  const error = el.querySelector(".error");
+  const fields = Object.fromEntries([...el.querySelectorAll("[name]")].map(f => [f.name, f.value]));
+  try {
+    await api(`/api/proposals/${p.id}/approve`, fields);
+    el.remove();
+    return true;
+  } catch (e) { error.textContent = e.message; return false; }
+}
+
 function bindActions(el, p) {
   const error = el.querySelector(".error");
   el.querySelector("[data-act=approve]").onclick = async () => {
-    const fields = Object.fromEntries([...el.querySelectorAll("[name]")].map(f => [f.name, f.value]));
-    try { await api(`/api/proposals/${p.id}/approve`, fields); el.remove(); await loadGraph(); updateCount(); }
-    catch (e) { error.textContent = e.message; }
+    if (await approveCard(el, p)) { await loadGraph(); updateCount(); }
   };
   // Scartare un'affermazione scarta anche le prese di posizione su di essa.
   el.querySelector("[data-act=reject]").onclick = async () => {
@@ -212,6 +231,7 @@ function card(p) {
 function updateCount() {
   const n = document.querySelectorAll("#queue .card").length;
   document.getElementById("count").textContent = `(${n})`;
+  updateBulk();
   if (!n) document.getElementById("queue").innerHTML = '<p class="muted">Nessuna proposta in attesa.</p>';
 }
 
@@ -270,9 +290,68 @@ async function refresh() {
 async function loadQueue() {
   const queue = document.getElementById("queue");
   queue.innerHTML = "";
-  for (const p of await api("/api/proposals")) queue.append(card(p));
+  for (const p of await api("/api/proposals")) {
+    const el = card(p);
+    el._p = p;
+    // «Senza avvisi»: l'unico avviso ammesso è l'ordine (una smentita che aspetta la sua tesi).
+    el._clean = !p.warnings.some(w => !w.startsWith("Si approva dopo"));
+    el.insertAdjacentHTML("afterbegin", `<label class="pick"><input type="checkbox" class="sel"> seleziona</label>`);
+    queue.append(el);
+  }
   updateCount();
 }
+
+// Revisione in blocco: le proposte si approvano nell'ordine della coda, così una tesi passa prima
+// delle smentite che la riguardano. Quelle con avvisi non partono mai da sole: vanno selezionate.
+const cards = () => [...document.querySelectorAll("#queue .card")];
+function updateBulk() {
+  const clean = cleanCards().length, picked = cards().filter(c => c.querySelector(".sel")?.checked).length;
+  document.getElementById("bulk").hidden = !cards().length;
+  document.getElementById("approve-clean").textContent = `Approva tutte quelle senza avvisi (${clean})`;
+  document.getElementById("approve-clean").disabled = !clean;
+  document.getElementById("approve-picked").textContent = `Approva le selezionate (${picked})`;
+  document.getElementById("reject-picked").textContent = `Scarta le selezionate (${picked})`;
+  document.getElementById("approve-picked").disabled = document.getElementById("reject-picked").disabled = !picked;
+}
+async function bulk(list, action) {
+  const msg = document.getElementById("bulk-msg"), buttons = document.querySelectorAll("#bulk button");
+  buttons.forEach(b => b.disabled = true);
+  let ok = 0, ko = 0;
+  for (const [i, el] of list.entries()) {
+    if (!el.isConnected) continue;                 // già tolta (es. smentita di una tesi scartata)
+    msg.textContent = `${i + 1} di ${list.length}…`;
+    if (action === "approve") (await approveCard(el, el._p)) ? ok++ : ko++;
+    else {
+      try {
+        await api(`/api/proposals/${el._p.id}/reject`, {});
+        el.remove();
+        document.querySelectorAll(`#queue [data-target="${el._p.id}"]`).forEach(x => x.remove());
+        ok++;
+      } catch (e) { el.querySelector(".error").textContent = e.message; ko++; }
+    }
+  }
+  await loadGraph();
+  updateCount();
+  msg.textContent = `${action === "approve" ? "Approvate" : "Scartate"}: ${ok}.` +
+    (ko ? ` Non riuscite: ${ko} (il motivo è scritto in rosso nella scheda).` : "");
+}
+// Una smentita «senza avvisi» parte solo se anche la tesi a cui punta parte con lei (o è già approvata).
+const cleanCards = () => {
+  const list = cards().filter(c => c._clean);
+  const going = new Set(list.map(c => c._p.id));
+  const waiting = new Set(cards().map(c => c._p.id));
+  return list.filter(c => {
+    const t = c._p.data.bersaglio_proposta;
+    return !t || going.has(t) || !waiting.has(t);
+  });
+};
+document.getElementById("approve-clean").onclick = () => bulk(cleanCards(), "approve");
+document.getElementById("approve-picked").onclick = () => bulk(cards().filter(c => c.querySelector(".sel").checked), "approve");
+document.getElementById("reject-picked").onclick = () => {
+  const list = cards().filter(c => c.querySelector(".sel").checked);
+  if (list.length) bulk(list, "reject");
+};
+document.getElementById("queue").addEventListener("change", ev => { if (ev.target.classList.contains("sel")) updateBulk(); });
 
 document.getElementById("voce").addEventListener("input", e =>
   tagFor(e.target, document.getElementById("voce-tag")));

@@ -26,6 +26,10 @@
     "openalex": {
       "chiave": "",
       "nota": "gratuita su https://openalex.org (articoli scientifici)"
+    },
+    "wikipedia": {
+      "chiave": "",
+      "nota": "facoltativa: token personale gratuito (OAuth 2.0 owner-only) su meta.wikimedia.org, alza il limite delle richieste anonime"
     }
   },
   "limiti": {

@@ -662,4 +662,16 @@ assert len(graph(conn)["edges"]) == before                                      
 conn.close()
 ok("l'orientamento mostra conteso, convergenze, attori, lacune e domande; il quaderno resta separato dal grafo")
 
+# 31. Stato di MAVI: un controllo che fallisce non ferma gli altri e non mostra mai le chiavi
+from core import diagnostics
+bad = diagnostics.check("Prova", "rotto", lambda: 1 / 0)
+assert bad["esito"] == "errore" and bad["dettaglio"]
+assert diagnostics.check("Prova", "mancante", diagnostics.package("modulo_che_non_esiste", "prova"))["esito"] == "errore"
+assert diagnostics.check("Prova", "avviso", lambda: ("avviso", "x"))["esito"] == "avviso"
+assert diagnostics.check("Ambiente", "Python", diagnostics.python)["esito"] == "ok"
+key = extraction.provider().get("chiave")
+if key:
+    assert all(key not in c["dettaglio"] for c in [diagnostics.check("Modello", "m", diagnostics.model)])
+ok("lo stato di MAVI isola i controlli che falliscono e non mostra le chiavi")
+
 print("\nTutti i controlli superati.")

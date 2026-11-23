@@ -50,6 +50,21 @@ la scheda (tipi di entità e relazioni), la correggi e crei il clone.
 Il pannello iniziale del grafo elenca cosa merita attenzione: conflitti aperti, contestazioni senza
 esito, affermazioni con una sola fonte, interpretazioni senza voce. Un clic porta all'affermazione.
 
+## Stato di MAVI
+
+«Stato» (in alto nel grafo) controlla in un colpo che il modello risponda con la chiave giusta, che le fonti
+siano raggiungibili e che i componenti per leggere pagine web e PDF siano installati. Le chiavi non vengono
+mai mostrate. Se qualcosa non va, la riga in rosso dice cosa fare.
+
+Nota: dal 2026 Wikipedia limita le richieste anonime (alcune centinaia all'ora per indirizzo). Per un uso
+normale basta; se compare l'errore 429 si può aggiungere un token personale gratuito in `impostazioni.json`.
+
+## Revisione in blocco
+
+Nella coda di revisione: «Approva tutte quelle senza avvisi» approva in un colpo le proposte pulite, nell'ordine
+della coda (una smentita parte solo insieme alla tesi a cui punta). Con le caselle «seleziona» puoi approvare o
+scartare più proposte insieme. Quelle con avvisi non partono mai da sole: vanno guardate o selezionate.
+
 ## Orientamento
 
 «Orientamento» (in alto nel grafo) non risponde al posto tuo: mette in fila ciò che l'archivio contiene

@@ -9,7 +9,7 @@ import os
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from core import extraction, orientation, sources
+from core import diagnostics, extraction, orientation, sources
 from core.database import (ROOT, SOURCE_GENRES, SOURCE_NATURES, add_note, change_status, notes, set_note_state, connect, create_clone, graph, list_clones,
                            merge_entities, read_profile, retract, validate_profile)
 
@@ -222,6 +222,11 @@ def api_sources_file(payload: dict = Body(...)):
         raise HTTPException(400, f"«{name}»: {e}")
     except ValueError:
         raise HTTPException(400, f"«{name}»: file non leggibile.")
+
+
+@app.get("/api/status")
+def api_status():
+    return {"controlli": diagnostics.status(CLONE)}
 
 
 @app.get("/api/orientation")

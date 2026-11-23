@@ -103,13 +103,30 @@ def parse_wikipedia(reply, lang):
             for r in reply.get("query", {}).get("search", [])]
 
 
+def wiki_http(url):
+    try:
+        return http(url, headers=wiki_headers())
+    except SourceError as e:
+        if "429" in str(e):
+            raise SourceError("errore 429: Wikipedia limita le richieste anonime (alcune centinaia all'ora); "
+                              "riprova più tardi, oppure aggiungi un token personale gratuito in impostazioni.json")
+        raise
+
+
+def wiki_headers():
+    """Wikimedia dal 2026 limita le richieste anonime (alcune centinaia all'ora per indirizzo): con un
+    token personale gratuito (OAuth 2.0, «owner-only») i limiti salgono. Facoltativo."""
+    token = keys().get("wikipedia", {}).get("chiave")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
 def search_wikipedia(query, n=6, langs=("it", "en")):
     out = []
     for lang in langs:
         url = BASES["wikipedia"].format(lang=lang) + "?" + urllib.parse.urlencode({
             "action": "query", "list": "search", "srsearch": query, "srlimit": n,
             "format": "json", "utf8": 1})
-        out += parse_wikipedia(http(url), lang)
+        out += parse_wikipedia(wiki_http(url), lang)
     return out
 
 
@@ -222,7 +239,7 @@ def search(query, which):
 def fetch_wikipedia(url):
     m = re.match(r"https?://(\w+)\.wikipedia\.org/wiki/(.+)", url)
     lang, title = m[1], urllib.parse.unquote(m[2]).replace("_", " ")
-    reply = http(BASES["wikipedia"].format(lang=lang) + "?" + urllib.parse.urlencode({
+    reply = wiki_http(BASES["wikipedia"].format(lang=lang) + "?" + urllib.parse.urlencode({
         "action": "query", "prop": "extracts|revisions", "explaintext": 1, "titles": title,
         "rvprop": "timestamp", "format": "json", "redirects": 1}))
     page = next(iter(reply.get("query", {}).get("pages", {}).values()), {})
