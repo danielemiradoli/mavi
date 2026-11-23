@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAVI · nuovo clone</title>
+<style>
+  :root { --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #dcd8cf; --smentita: #b3261e; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .08em; }
+  header a { margin-left: auto; color: inherit; }
+  main { max-width: 1040px; margin: 0 auto; padding: 16px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-bottom: 20px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 8px 0 3px; }
+  input, textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); }
+  button { font: inherit; padding: 6px 14px; border-radius: 4px; border: 1px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--ink); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .muted { color: var(--muted); }
+  .error { color: var(--smentita); }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; color: var(--muted); font-weight: normal; padding: 4px; }
+  td { padding: 3px; vertical-align: top; }
+  td input { padding: 4px 6px; }
+  .rel-table { overflow-x: auto; }
+</style>
+</head>
+<body>
+<header><h1>MAVI</h1><span class="muted">Nuovo clone</span><a href="./">← Torna al grafo</a></header>
+<main>
+  <section>
+    <h2>1. Descrivi il dominio</h2>
+    <p class="muted">Un clone è un archivio dedicato a un argomento. Descrivilo: il modello propone una prima
+      scheda (tipi di entità e relazioni), che poi correggi qui sotto prima di creare il clone.</p>
+    <div class="grid">
+      <div><label for="nome">Nome del clone *</label><input id="nome" placeholder="es. Il furto della Gioconda (1911)"></div>
+      <div><label for="dominio">Dominio</label><input id="dominio" placeholder="es. Storia dell'arte · furti e recuperi"></div>
+    </div>
+    <label for="obiettivo">Obiettivo *</label>
+    <textarea id="obiettivo" rows="2" placeholder="Che cosa deve permettere di capire questo archivio?"></textarea>
+    <label for="domande">Domande guida (una per riga)</label>
+    <textarea id="domande" rows="3" placeholder="Chi ha rubato il dipinto?&#10;Chi fu sospettato, e perché?"></textarea>
+    <p class="actions"><button id="proponi">Proponi la scheda con l'AI</button>
+      <button class="secondary" id="vuota">Scrivila a mano</button>
+      <span id="stato1" class="muted"></span></p>
+  </section>
+
+  <section id="passo2" hidden>
+    <h2>2. Correggi la scheda</h2>
+    <label for="tipi">Tipi di entità (separati da virgole)</label>
+    <input id="tipi">
+    <label>Relazioni</label>
+    <p class="muted" style="margin:0 0 6px">«Da» e «a» sono i tipi ammessi come soggetto e oggetto, separati da virgole.
+      La relazione «contesta», per smentite e contestazioni, viene aggiunta da sola.</p>
+    <div class="rel-table"><table>
+      <thead><tr><th style="width:16%">Nome</th><th>Definizione</th><th style="width:14%">Inversa</th>
+        <th style="width:14%">Da</th><th style="width:14%">A</th><th></th></tr></thead>
+      <tbody id="relazioni"></tbody>
+    </table></div>
+    <p class="actions"><button class="secondary" id="aggiungi">＋ Relazione</button></p>
+    <label for="cartella">Nome della cartella</label>
+    <input id="cartella" placeholder="si ricava dal nome del clone">
+    <p class="actions"><button id="crea">Crea il clone</button><span id="stato2" class="error"></span></p>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const list = v => (Array.isArray(v) ? v : String(v || "").split(",")).map(x => String(x).trim()).filter(Boolean);
+
+async function api(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+
+function addRow(r = {}) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input data-k="nome" value="${esc(r.nome)}"></td>
+    <td><input data-k="definizione" value="${esc(r.definizione)}"></td>
+    <td><input data-k="inversa" value="${esc(r.inversa)}"></td>
+    <td><input data-k="da" value="${esc(list(r.da).join(", "))}"></td>
+    <td><input data-k="a" value="${esc(list(r.a).join(", "))}"></td>
+    <td><button class="secondary" title="Togli">✕</button></td>`;
+  tr.querySelector("button").onclick = () => tr.remove();
+  $("relazioni").append(tr);
+}
+
+function showStep2(scheda) {
+  $("tipi").value = (scheda.tipi_entita || []).join(", ");
+  $("relazioni").innerHTML = "";
+  (scheda.relazioni || []).filter(r => r.nome !== "contesta").forEach(addRow);
+  if (!$("relazioni").children.length) for (let i = 0; i < 3; i++) addRow();
+  $("passo2").hidden = false;
+  $("passo2").scrollIntoView({ behavior: "smooth" });
+}
+
+function describe() {
+  return { nome: $("nome").value.trim(), dominio: $("dominio").value.trim(),
+           obiettivo: $("obiettivo").value.trim(), domande: $("domande").value };
+}
+
+$("proponi").onclick = async () => {
+  const btn = $("proponi");
+  btn.disabled = true;
+  $("stato1").className = "muted";
+  $("stato1").textContent = "Il modello sta preparando la scheda…";
+  try {
+    showStep2(await api("/api/clones/propose", describe()));
+    $("stato1").textContent = "Scheda proposta: controllala e correggila qui sotto.";
+  } catch (e) {
+    $("stato1").className = "error";
+    $("stato1").textContent = e.message;
+  } finally { btn.disabled = false; }
+};
+$("vuota").onclick = () => showStep2({});
+$("aggiungi").onclick = () => addRow();
+
+$("crea").onclick = async () => {
+  const d = describe();
+  const scheda = {
+    nome: d.nome, dominio: d.dominio, obiettivo: d.obiettivo,
+    domande: d.domande.split("\n").map(x => x.trim()).filter(Boolean),
+    tipi_entita: list($("tipi").value),
+    relazioni: [...$("relazioni").children].map(tr => Object.fromEntries(
+      [...tr.querySelectorAll("[data-k]")].map(i => [i.dataset.k, ["da", "a"].includes(i.dataset.k) ? list(i.value) : i.value.trim()])))
+      .filter(r => r.nome),
+  };
+  try {
+    await api("/api/clones", { cartella: $("cartella").value.trim() || d.nome, scheda });
+    location.href = "./";
+  } catch (e) { $("stato2").textContent = e.message; }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "nome": "La beffa delle false teste di Modigliani",
+  "dominio": "Storia dell'arte · attribuzioni e falsi",
+  "obiettivo": "Ricostruire come tre false sculture furono attribuite a Modigliani a Livorno nell'estate del 1984, e come l'attribuzione crollò.",
+  "domande": [
+    "Chi ha scolpito davvero ciascuna testa?",
+    "Chi ha sostenuto l'autenticità, chi l'ha contestata, e quando?",
+    "Come cambia lo stato delle conoscenze tra luglio e settembre 1984?"
+  ],
+  "tipi_entita": [
+    "persona",
+    "opera",
+    "luogo",
+    "evento",
+    "organizzazione"
+  ],
+  "relazioni": [
+    {"nome": "è opera di", "definizione": "Il soggetto (un'opera) è stato realizzato dall'oggetto (una persona).", "inversa": "è autore di", "da": ["opera"], "a": ["persona"]},
+    {"nome": "giudica falsa", "definizione": "Il soggetto sostiene pubblicamente che l'opera oggetto non è autentica.", "inversa": "è giudicata falsa da", "da": ["persona"], "a": ["opera"]},
+    {"nome": "stessa mano di", "definizione": "Le due opere sono state realizzate dallo stesso autore.", "inversa": "stessa mano di", "da": ["opera"], "a": ["opera"]},
+    {"nome": "ritrovata in", "definizione": "L'opera è stata recuperata nel luogo indicato.", "inversa": "luogo di ritrovamento di", "da": ["opera"], "a": ["luogo"]},
+    {"nome": "getta sculture in", "definizione": "Il soggetto avrebbe gettato proprie sculture nel luogo indicato.", "inversa": "riceve sculture di", "da": ["persona"], "a": ["luogo"]},
+    {"nome": "cura", "definizione": "Il soggetto è curatore della mostra o dell'evento.", "inversa": "è curata da", "da": ["persona"], "a": ["evento"]},
+    {"nome": "promuove", "definizione": "Il soggetto prende l'iniziativa dell'evento e ne ottiene l'avvio.", "inversa": "è promosso da", "da": ["persona", "organizzazione"], "a": ["evento"]},
+    {"nome": "finanzia", "definizione": "Il soggetto paga in tutto o in parte l'evento.", "inversa": "è finanziato da", "da": ["organizzazione", "persona"], "a": ["evento"]},
+    {"nome": "avviene in", "definizione": "L'evento si svolge nel luogo indicato.", "inversa": "luogo di", "da": ["evento"], "a": ["luogo"]},
+    {"nome": "dedicata a", "definizione": "La mostra o l'evento ha come soggetto la persona indicata.", "inversa": "soggetto di", "da": ["evento"], "a": ["persona"]}
+  ]
+}

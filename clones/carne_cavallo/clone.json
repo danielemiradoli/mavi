@@ -1,0 +1,35 @@
+{
+  "nome": "Lo scandalo della carne di cavallo (2013)",
+  "dominio": "Cibo · filiere e sicurezza alimentare",
+  "obiettivo": "Ricostruire come carne di cavallo venduta come manzo sia arrivata in prodotti di marca in tutta Europa nel 2013, e chi ne porta la responsabilità.",
+  "domande": [
+    "Da dove veniva davvero la carne di cavallo?",
+    "In quale passaggio della filiera il cavallo è diventato manzo?",
+    "Chi ha accusato chi, e che cosa hanno stabilito i tribunali?"
+  ],
+  "tipi_entita": [
+    "persona",
+    "azienda",
+    "istituzione",
+    "prodotto",
+    "materia prima",
+    "paese"
+  ],
+  "relazioni": [
+    {"nome": "prodotto da", "definizione": "Il prodotto è fabbricato dall'azienda indicata.", "inversa": "produce", "da": ["prodotto"], "a": ["azienda"]},
+    {"nome": "venduto da", "definizione": "Il prodotto è venduto con il marchio o nei negozi dell'azienda indicata.", "inversa": "vende", "da": ["prodotto"], "a": ["azienda"]},
+    {"nome": "contiene", "definizione": "Il prodotto contiene la materia prima indicata (la quantità, es. la percentuale, va nel valore).", "inversa": "è presente in", "da": ["prodotto"], "a": ["materia prima"]},
+    {"nome": "proviene da", "definizione": "Il soggetto ha origine nel paese indicato.", "inversa": "è origine di", "da": ["materia prima", "prodotto"], "a": ["paese"]},
+    {"nome": "fornisce", "definizione": "Il soggetto vende materia prima o prodotti all'azienda indicata.", "inversa": "è fornito da", "da": ["azienda"], "a": ["azienda"]},
+    {"nome": "parte di", "definizione": "L'azienda è una controllata o una divisione dell'azienda indicata.", "inversa": "controlla", "da": ["azienda"], "a": ["azienda"]},
+    {"nome": "dirige", "definizione": "La persona guida l'azienda o lo stabilimento indicato.", "inversa": "è diretta da", "da": ["persona"], "a": ["azienda"]},
+    {"nome": "membro di", "definizione": "La persona parla o agisce per conto dell'istituzione indicata.", "inversa": "ha come membro", "da": ["persona"], "a": ["istituzione"]},
+    {"nome": "prestanome di", "definizione": "La persona agisce formalmente al posto di un'altra.", "inversa": "usa come prestanome", "da": ["persona"], "a": ["persona"]},
+    {"nome": "rileva carne equina in", "definizione": "L'istituzione trova DNA di cavallo nel prodotto con un test di laboratorio.", "inversa": "positivo ai test di", "da": ["istituzione", "azienda"], "a": ["prodotto"]},
+    {"nome": "ritira", "definizione": "L'azienda toglie il prodotto dal commercio.", "inversa": "ritirato da", "da": ["azienda"], "a": ["prodotto"]},
+    {"nome": "rietichetta come manzo", "definizione": "Il soggetto fa passare la carne equina per carne bovina cambiandone etichette o documenti.", "inversa": "rietichettata da", "da": ["persona", "azienda"], "a": ["materia prima"]},
+    {"nome": "sospende la licenza di", "definizione": "L'istituzione blocca l'autorizzazione a operare dell'azienda.", "inversa": "licenza sospesa da", "da": ["istituzione"], "a": ["azienda"]},
+    {"nome": "condanna", "definizione": "Il tribunale dichiara colpevole la persona indicata.", "inversa": "condannato da", "da": ["istituzione"], "a": ["persona"]},
+    {"nome": "contesta", "definizione": "Il soggetto respinge pubblicamente l'affermazione indicata.", "inversa": "contestata da", "oggetto": "affermazione", "da": ["persona", "istituzione", "azienda"]}
+  ]
+}

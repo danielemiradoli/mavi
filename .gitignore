@@ -1,0 +1,10 @@
+# Chiavi dei modelli: mai nel repository
+impostazioni.json
+# Ambiente Python e file temporanei
+.venv/
+__pycache__/
+*.pyc
+esito.txt
+# I database dei cloni sono i dati di lavoro: restano sul PC
+clones/*/vault/
+clones/.attivo

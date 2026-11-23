@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAVI</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #dcd8cf;
+    --certa: #1f7a4d; --verificare: #8a8a84; --smentita: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 10px 16px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .08em; }
+  header span { color: var(--muted); }
+  header select { font: inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px;
+                  background: var(--panel); color: var(--ink); max-width: 46vw; }
+  #timebar { display: flex; align-items: center; gap: 12px; padding: 8px 16px;
+             border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+  #timebar input { flex: 1; max-width: 520px; accent-color: var(--ink); }
+  #when { font-weight: 600; min-width: 150px; }
+  #filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 6px 16px;
+               border-bottom: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+  #filterbar input, #filterbar select { font: inherit; padding: 2px 6px; border: 1px solid var(--line);
+               border-radius: 4px; background: #fff; color: var(--ink); }
+  #filterbar input { width: 220px; }
+  #filterbar button { font: inherit; padding: 2px 10px; border: 1px solid var(--line); border-radius: 4px;
+                      background: #fff; color: var(--ink); cursor: pointer; }
+  #count { color: var(--muted); }
+  #search-msg { color: var(--smentita); }
+  main { flex: 1; display: flex; min-height: 0; }
+  #cy { flex: 1; min-width: 0; }
+  aside { width: 360px; overflow-y: auto; padding: 16px; background: var(--panel);
+          border-left: 1px solid var(--line); }
+  aside h2 { font-size: 16px; margin: 0 0 4px; }
+  aside h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--muted); margin: 18px 0 4px; }
+  aside p { margin: 0 0 6px; }
+  aside ul { margin: 0; padding-left: 18px; }
+  .muted { color: var(--muted); }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; color: #fff; font-size: 13px; }
+  .tag { display: inline-block; padding: 0 7px; border-radius: 10px; border: 1px solid var(--ink); font-size: 13px; }
+  .certa { background: var(--certa); } .da_verificare { background: var(--verificare); }
+  .smentita { background: var(--smentita); }
+  .conflict { border-left: 3px solid var(--smentita); padding-left: 8px; margin-bottom: 8px; }
+  .history li.future { color: var(--muted); opacity: .6; }
+  blockquote { margin: 0; padding-left: 10px; border-left: 3px solid var(--line); }
+  .editor { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .editor label { display: block; font-size: 12px; color: var(--muted); margin: 6px 0 2px; }
+  .editor input, .editor select { width: 100%; font: inherit; padding: 5px 7px; border: 1px solid var(--line);
+                                  border-radius: 4px; background: #fff; color: var(--ink); }
+  .editor button { font: inherit; margin-top: 8px; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+                   border: 1px solid var(--ink); background: var(--ink); color: #fff; }
+  .editor button.secondary { background: #fff; color: var(--ink); }
+  .error { color: var(--smentita); }
+  details.weak { margin-bottom: 6px; }
+  details.weak summary { cursor: pointer; }
+  details.weak li { margin-bottom: 4px; font-size: 14px; }
+  .legend { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .legend i { display: inline-block; width: 26px; margin-right: 6px; vertical-align: middle; border-top-width: 3px; }
+  .legend b { display: inline-block; width: 18px; font-weight: normal; }
+  a { color: inherit; }
+  @media (max-width: 760px) { main { flex-direction: column; } aside { width: auto; height: 45%; border-left: 0; border-top: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header><h1>MAVI</h1><select id="clone" title="Cambia clone"></select><a href="revisione.html" style="margin-left:auto">Aggiungi un testo · coda di revisione</a></header>
+<div id="timebar">
+  <label for="slider">Stato delle conoscenze al</label>
+  <input id="slider" type="range" min="0" step="1">
+  <span id="when"></span>
+</div>
+<div id="filterbar">
+  <input id="search" type="search" list="search-list" placeholder="Cerca un'entità (anche per nome alternativo)"
+         title="Scrivi e premi Invio per andare all'entità">
+  <datalist id="search-list"></datalist>
+  <label>Tipo <select id="f-type"><option value="">tutti</option></select></label>
+  <label>Stato <select id="f-status"><option value="">tutti</option></select></label>
+  <label>Affermazione <select id="f-claim"><option value="">tutte</option></select></label>
+  <button id="f-reset" type="button">Azzera</button>
+  <span id="count"></span>
+  <span id="search-msg"></span>
+</div>
+<main>
+  <div id="cy"></div>
+  <aside>
+    <div id="detail"></div>
+    <div class="legend">
+      <div>
+        <p><i style="border-top-style:solid;border-color:var(--certa)"></i>certa</p>
+        <p><i style="border-top-style:dashed;border-color:var(--verificare)"></i>da verificare</p>
+        <p><i style="border-top-style:dotted;border-color:var(--smentita)"></i>smentita</p>
+      </div>
+      <div>
+        <p><b>▶</b>documentato</p>
+        <p><b>◆</b>interpretazione</p>
+        <p><b>○</b>ipotesi</p>
+        <p><b>▷</b>inferenza</p>
+      </div>
+      <p style="grid-column: 1 / 3">⚠ in conflitto con un'altra asserzione</p>
+      <p style="grid-column: 1 / 3"><b>■</b>affermazione su cui altri si pronunciano (es. una smentita)</p>
+      <p style="grid-column: 1 / 3"><b>→</b><em>sostiene</em>: chi parla nella fonte, per le tesi discutibili</p>
+    </div>
+  </aside>
+</main>
+
+<script src="cytoscape.min.js"></script>
+<script>
+const STATUS = { certa: "certa", da_verificare: "da verificare", smentita: "smentita" };
+const TODAY = new Date().toISOString().slice(0, 10);
+
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+                               body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+
+// Dopo una correzione si ricarica la pagina, riaprendo l'elemento che si stava guardando.
+function reloadKeeping(id) {
+  try { sessionStorage.setItem("mavi-select", id); } catch (e) {}
+  location.reload();
+}
+const MONTHS = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
+                "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+const PALETTE = ["#3b6ea5", "#b0782a", "#7a4f9a", "#2f8f8a", "#a04a6c", "#5f7a2f", "#666"];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// Date ISO anche parziali: "1984", "1984-07", "1984-07-24".
+function fmtDate(d) {
+  if (!d) return "";
+  const [y, m, g] = d.split("-");
+  if (!m) return y;
+  return (g ? Number(g) + " " : "") + MONTHS[Number(m) - 1] + " " + y;
+}
+// Una data parziale vale dall'inizio del periodo: il confronto tra stringhe ISO basta.
+const reached = (d, at) => at === null || !d || d <= at;
+
+function statusAt(e, at) {
+  let s = e.history[0].status;
+  for (const h of e.history) if (reached(h.date, at)) s = h.status;
+  return s;
+}
+
+fetch("/api/graph").then(r => r.json()).then(data => {
+  const profile = data.profile;
+  // Selettore dei cloni: cambiare clone ricarica la pagina; l'ultima voce crea un clone nuovo.
+  fetch("/api/clones").then(r => r.json()).then(c => {
+    const sel = document.getElementById("clone");
+    sel.innerHTML = c.cloni.map(x =>
+      `<option value="${esc(x.nome)}" ${x.nome === c.attivo ? "selected" : ""}>${esc(x.titolo)}</option>`).join("") + '<option value="__nuovo">＋ Nuovo clone…</option>';
+    sel.onchange = () => sel.value === "__nuovo" ? location.href = "nuovo.html"
+      : post("/api/clone", { nome: sel.value }).then(() => location.reload());
+  });
+
+  const types = [...new Set(data.nodes.map(n => n.type))];
+  const color = t => PALETTE[types.indexOf(t) % PALETTE.length];
+  const byId = Object.fromEntries(data.edges.map(e => [e.id, e]));
+
+  // Un'affermazione a cui altre affermazioni puntano diventa un piccolo nodo-tesi
+  // a metà del suo collegamento: le smentite si attaccano lì.
+  const targeted = new Set(data.edges.filter(e => e.object_assertion_id).map(e => e.object_assertion_id));
+  // Chi sostiene una tesi si disegna solo se la tesi è discutibile (non un fatto documentato
+  // e indiscusso), se non è già un'estremità del collegamento e se non è un'aggiunta a mano.
+  const debated = e => e.claim_type !== "documentato" || e.targeted_by.length || e.conflicts.length;
+  const voicesOf = e => e.is_manual || !debated(e) ? [] :
+    e.speakers.filter(v => v.id !== e.subject_id && v.id !== e.object_id);
+  const edgeLabel = e => e.value ? `${e.relation} (${e.value})` : e.relation;
+  const endOf = e => e.object_assertion_id ? "c" + e.object_assertion_id : "n" + e.object_id;
+  const edgeEls = data.edges.flatMap(e => {
+    const base = { eid: e.id, claim_type: e.claim_type, status: e.status };
+    const voices = voicesOf(e);
+    if (!targeted.has(e.id) && !voices.length)
+      return [{ data: { ...base, id: "e" + e.id, source: "n" + e.subject_id, target: endOf(e), label: edgeLabel(e) } }];
+    return [
+      ...voices.map(v => ({ data: { id: `s${e.id}_${v.id}`, eid: e.id, speaks: true,
+                                    source: "n" + v.id, target: "c" + e.id, label: "sostiene" } })),
+      { data: { id: "c" + e.id, eid: e.id, claim: true, label: "", color: css("--ink") } },
+      { data: { ...base, id: "e" + e.id, source: "n" + e.subject_id, target: "c" + e.id, label: edgeLabel(e), half: "a" } },
+      { data: { ...base, id: "e" + e.id + "b", source: "c" + e.id, target: endOf(e), label: "", half: "b" } },
+    ];
+  });
+
+  const cy = cytoscape({
+    container: document.getElementById("cy"),
+    elements: [
+      ...data.nodes.map(n => ({ data: { id: "n" + n.id, label: n.label, type: n.type, aliases: n.aliases, color: color(n.type) } })),
+      ...edgeEls,
+    ],
+    style: [
+      { selector: "node", style: { "background-color": "data(color)", label: "data(label)", "font-size": 12,
+          color: css("--ink"), "text-valign": "bottom", "text-margin-y": 4, width: 22, height: 22 } },
+      { selector: "edge", style: { "curve-style": "bezier", width: 2, "arrow-scale": 1.3,
+          label: "data(label)", "font-size": 9, color: css("--muted"), "text-rotation": "autorotate",
+          "text-background-color": css("--bg"), "text-background-opacity": 1, "text-background-padding": 2 } },
+      { selector: 'edge[claim_type = "documentato"]', style: { "target-arrow-shape": "triangle" } },
+      { selector: 'edge[claim_type = "interpretazione"]', style: { "target-arrow-shape": "diamond" } },
+      { selector: 'edge[claim_type = "ipotesi"]', style: { "target-arrow-shape": "circle", "target-arrow-fill": "hollow" } },
+      { selector: 'edge[claim_type = "inferenza"]', style: { "target-arrow-shape": "triangle", "target-arrow-fill": "hollow" } },
+      { selector: 'edge[status = "certa"]', style: { "line-color": css("--certa"), "target-arrow-color": css("--certa") } },
+      { selector: 'edge[status = "da_verificare"]', style: { "line-style": "dashed", "line-color": css("--verificare"), "target-arrow-color": css("--verificare") } },
+      { selector: 'edge[status = "smentita"]', style: { "line-style": "dotted", "line-color": css("--smentita"), "target-arrow-color": css("--smentita") } },
+      { selector: 'edge[half = "a"]', style: { "target-arrow-shape": "none" } },
+      { selector: "edge[?speaks]", style: { width: 1, "line-color": "#a99e86", "target-arrow-shape": "vee",
+          "target-arrow-color": "#a99e86", "font-style": "italic" } },
+      { selector: "node[?claim]", style: { shape: "rectangle", width: 9, height: 9 } },
+      { selector: "node.match", style: { "border-width": 3, "border-color": css("--ink") } },
+      { selector: ".faded", style: { opacity: 0.1 } },
+      { selector: ".hidden", style: { display: "none" } },
+      { selector: ":selected", style: { "overlay-color": "#000", "overlay-opacity": 0.12, "overlay-padding": 4 } },
+    ],
+    // La disposizione è calcolata una volta sola sul grafo completo, così i nodi non saltano col tempo.
+    layout: { name: "cose", animate: false, padding: 40, nodeDimensionsIncludeLabels: true,
+              nodeRepulsion: () => 500000, idealEdgeLength: () => 110, edgeElasticity: () => 60, gravity: 0.3, numIter: 3000 },
+  });
+
+  const detail = document.getElementById("detail");
+  const slider = document.getElementById("slider");
+  slider.max = data.dates.length;          // l'ultima posizione = tutto ciò che sappiamo oggi
+  slider.value = data.dates.length;
+  let at = null;                           // data selezionata; null = oggi
+  let selected = null;                     // ciò che è aperto nel pannello
+
+  // Filtri: un'asserzione resta nel grafo solo se li soddisfa tutti. Lo stato è quello
+  // valido alla data scelta con la barra; il tipo di entità vale per il soggetto o l'oggetto.
+  const fType = document.getElementById("f-type");
+  const fStatus = document.getElementById("f-status");
+  const fClaim = document.getElementById("f-claim");
+  const search = document.getElementById("search");
+  const searchMsg = document.getElementById("search-msg");
+  const fill = (sel, values, label = v => v) =>
+    sel.insertAdjacentHTML("beforeend", values.map(v => `<option value="${esc(v)}">${esc(label(v))}</option>`).join(""));
+  fill(fType, types.slice().sort());
+  fill(fStatus, Object.keys(STATUS), k => STATUS[k]);
+  fill(fClaim, [...new Set(data.edges.map(e => e.claim_type))]);
+  const nodeType = Object.fromEntries(data.nodes.map(n => [n.id, n.type]));
+  const passes = e =>
+    (!fStatus.value || statusAt(e, at) === fStatus.value) &&
+    (!fClaim.value || e.claim_type === fClaim.value) &&
+    (!fType.value || nodeType[e.subject_id] === fType.value ||
+                     (e.object_id && nodeType[e.object_id] === fType.value));
+
+  // Ricerca per nome o nome alternativo, senza badare a maiuscole e accenti.
+  const fold = s => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const names = data.nodes.flatMap(n => [n.label, ...n.aliases].map(name => ({ name, id: n.id })));
+  document.getElementById("search-list").innerHTML =
+    [...new Set(names.map(x => x.name))].sort().map(x => `<option value="${esc(x)}">`).join("");
+  const matches = q => {
+    q = fold(q);
+    if (!q) return [];
+    const exact = names.filter(x => fold(x.name) === q);
+    return [...new Set((exact.length ? exact : names.filter(x => fold(x.name).includes(q))).map(x => x.id))];
+  };
+
+  function showProfile() {
+    detail.innerHTML = `
+      <h2>${esc(profile.nome)}</h2>
+      <p class="muted">${esc(profile.dominio)}</p>
+      <h3>Obiettivo</h3><p>${esc(profile.obiettivo)}</p>
+      <h3>Domande guida</h3><ul>${profile.domande.map(d => `<li>${esc(d)}</li>`).join("")}</ul>
+      ${data.edges.length ? "" : `<p><strong>Il grafo è ancora vuoto.</strong> Aggiungi un primo testo dalla
+         <a href="revisione.html">coda di revisione</a>.</p>`}
+      <p class="muted" style="margin-top:14px">Clicca un collegamento per vedere da quale fonte proviene.
+         Muovi la barra in alto per vedere cosa si sapeva in una certa data.</p>
+      <p class="muted">Quando selezioni qualcosa, il resto del grafo si attenua: restano in evidenza
+         chi sostiene, chi contesta e cosa contraddice. Clicca uno spazio vuoto per tornare alla vista completa.</p>
+      ${data.weak.length ? `<h3>Da approfondire</h3>` + data.weak.map(w => `
+        <details class="weak"><summary>${esc(w.titolo)} (${w.voci.length})</summary>
+          <p class="muted">${esc(w.spiegazione)}</p>
+          <ul>${w.voci.map(v => `<li><a href="#" data-eid="${v.id}">${esc(v.testo)}</a></li>`).join("")}</ul>
+        </details>`).join("") : ""}
+      ${data.retracted.length ? `<h3>Affermazioni ritirate (${data.retracted.length})</h3><ul>` +
+        data.retracted.map(r => `<li>${esc(r.subject)} — ${esc(r.relation)} → ${esc(r.object)}<br>
+          <span class="muted">${esc(fmtDate(r.retracted_at))}: ${esc(r.retracted_reason)}</span></li>`).join("") +
+        "</ul>" : ""}`;
+  }
+
+  function showEdge(e) {
+    const status = statusAt(e, at);
+    const period = [e.valid_from, e.valid_to].filter(Boolean).map(fmtDate).join(" → ");
+    const conflicts = e.conflicts.filter(c => reached(byId[c.id].known_from, at));
+    const about = e.targeted_by.filter(t => reached(byId[t.id].known_from, at));
+    // Gli stessi numeri altrove: stessa relazione e stessa unità, ordinati per valore.
+    const compare = e.value ? data.edges.filter(c => c.id !== e.id && c.relation === e.relation && c.value &&
+        (c.unit || "") === (e.unit || "") && reached(c.known_from, at)).sort((a, b) => a.value_min - b.value_min) : [];
+    detail.innerHTML = `
+      <h2>${esc(e.subject)}</h2>
+      <p>${esc(e.relation)} → <strong>${esc(e.object)}</strong></p>
+      <p class="muted">${esc(e.relation_definition)}</p>
+      <p><span class="tag">${esc(e.claim_type)}</span>
+         <span class="badge ${esc(status)}">${esc(STATUS[status])}${at ? " al " + esc(fmtDate(at)) : ""}</span>
+         ${e.is_manual ? '<span class="tag">aggiunta a mano</span>' : ""}</p>
+      ${e.value ? `<h3>Valore</h3><p><strong>${esc(e.value)}</strong></p>` : ""}
+      ${compare.length ? `<h3>Altri valori per «${esc(e.relation)}»</h3><ul>${compare.map(c =>
+          `<li><a href="#" data-eid="${c.id}">${esc(c.subject)} → ${esc(c.object)}</a>: <strong>${esc(c.value)}</strong>
+           <span class="muted">(${esc(c.source_label)})</span></li>`).join("")}</ul>` : ""}
+      ${period ? `<h3>Vale nel mondo</h3><p>${esc(period)}</p>` : ""}
+      ${e.known_from ? `<h3>Nota dal</h3><p>${esc(fmtDate(e.known_from))}</p>` : ""}
+      ${e.speakers.length ? `<h3>Chi la sostiene</h3><p>${e.speakers.map(v => esc(v.label)).join(" · ")}</p>` : ""}
+      <h3>Fonte</h3>
+      <p>${esc(e.source_label)}</p>
+      <p class="muted">${[e.source_kind, fmtDate(e.source_date)].filter(Boolean).map(esc).join(" · ")}</p>
+      ${e.reported_in ? `<p class="muted">Citazione riportata in: ${esc(e.reported_in)}</p>` : ""}
+      ${e.source_url ? `<p><a href="${esc(e.source_url)}" target="_blank" rel="noopener">Apri il documento</a></p>` : ""}
+      ${e.excerpt ? `<h3>Estratto</h3><blockquote>${esc(e.excerpt)}</blockquote>` : ""}
+      <h3>Storia dello stato</h3>
+      <ul class="history">${e.history.map(h => `<li class="${reached(h.date, at) ? "" : "future"}">
+          <strong>${esc(STATUS[h.status])}</strong> · ${esc(fmtDate(h.date) || "data ignota")}<br>
+          <span class="muted">${esc(h.reason)}</span></li>`).join("")}</ul>
+      ${about.length ? `<h3>Affermazioni su questa affermazione</h3>` + about.map(t =>
+          `<div class="conflict"><p><strong>${esc(t.subject)}</strong> ${esc(t.relation)}</p>
+           <p class="muted">${esc(t.source_label)}</p></div>`).join("") : ""}
+      ${conflicts.length ? `<h3>⚠ In conflitto con</h3>` + conflicts.map(c =>
+          `<div class="conflict"><p>${esc(c.with)}</p><p class="muted">${esc(c.note)}</p></div>`).join("") : ""}
+      <div class="editor"><h3>Correggi</h3>${at ? `<p class="muted">Per correggere porta la barra su «oggi».</p>` : `
+        <label for="ed-stato">Nuovo stato</label>
+        <select id="ed-stato">${Object.entries(STATUS).filter(([k]) => k !== status)
+            .map(([k, v]) => `<option value="${k}">${v}</option>`).join("")}</select>
+        <label for="ed-data">Data del cambiamento</label><input id="ed-data" value="${TODAY}">
+        <label for="ed-motivo">Motivo</label><input id="ed-motivo" placeholder="es. la sentenza del 2019 lo smentisce">
+        <button id="ed-status">Cambia stato</button>
+        <p class="muted" style="margin-top:14px">Se invece l'affermazione è stata inserita per errore (la fonte non dice
+          questo), ritirala: esce dal grafo ma resta nell'archivio, con data e motivo.</p>
+        <label for="ed-ritiro">Motivo del ritiro</label>
+        <input id="ed-ritiro" placeholder="es. l'articolo parla delle importazioni italiane, non del traffico">
+        <button class="secondary" id="ed-retract">Ritira dal grafo</button>
+        <p class="error" id="ed-error"></p>`}</div>`;
+    if (!at) bindEditor(e);
+  }
+
+  function bindEditor(e) {
+    const val = id => document.getElementById(id).value;
+    const fail = err => { document.getElementById("ed-error").textContent = err.message; };
+    document.getElementById("ed-status").onclick = () =>
+      post(`/api/assertions/${e.id}/status`, { stato: val("ed-stato"), data: val("ed-data"), motivo: val("ed-motivo") })
+        .then(() => reloadKeeping("e" + e.id), fail);
+    document.getElementById("ed-retract").onclick = () =>
+      post(`/api/assertions/${e.id}/retract`, { motivo: val("ed-ritiro") })
+        .then(() => reloadKeeping(""), fail);
+  }
+
+  function showNode(node) {
+    const n = node.data();
+    const said = data.edges.filter(e => reached(e.known_from, at) && e.speakers.some(v => "n" + v.id === n.id));
+    detail.innerHTML = `<h2>${esc(n.label)}</h2><p class="muted">${esc(n.type)}</p>
+      ${n.aliases.length ? `<h3>Altri nomi</h3><p>${n.aliases.map(esc).join(" · ")}</p>` : ""}
+      ${said.length ? `<h3>Sostiene</h3><ul>${said.map(e =>
+          `<li>${esc(e.subject)} — ${esc(e.relation)} → ${esc(e.object)}</li>`).join("")}</ul>` : ""}
+      <p>${node.connectedEdges(":visible").length} asserzioni collegate a questa data.</p>
+      <div class="editor"><h3>È un doppione?</h3>${at ? `<p class="muted">Per correggere porta la barra su «oggi».</p>` : `
+        <p class="muted">Unisci quest'entità a un'altra che indica la stessa cosa: affermazioni e voci passano
+          all'altra, e «${esc(n.label)}» diventa un suo nome alternativo.</p>
+        <label for="ed-unisci">Unisci a</label>
+        <input id="ed-unisci" list="entita-grafo" placeholder="scrivi o scegli un'entità">
+        <datalist id="entita-grafo">${data.nodes.filter(x => "n" + x.id !== n.id)
+            .map(x => `<option value="${esc(x.label)}">`).join("")}</datalist>
+        <button class="secondary" id="ed-merge">Unisci</button>
+        <p class="error" id="ed-error"></p>`}</div>`;
+    if (!at) document.getElementById("ed-merge").onclick = () =>
+      post(`/api/entities/${n.id.slice(1)}/merge`, { in: document.getElementById("ed-unisci").value })
+        .then(r => reloadKeeping("n" + r.in),
+              err => { document.getElementById("ed-error").textContent = err.message; });
+  }
+
+  function render() {
+    const i = Number(slider.value);
+    at = i < data.dates.length ? data.dates[i] : null;
+    document.getElementById("when").textContent = at ? fmtDate(at) : "oggi (tutto)";
+
+    cy.batch(() => {
+      cy.edges().forEach(edge => {
+        const e = byId[edge.data("eid")];
+        const visible = reached(e.known_from, at) && passes(e);
+        edge.toggleClass("hidden", !visible);
+        if (!visible || edge.data("speaks")) return;
+        const live = e.conflicts.some(c => reached(byId[c.id].known_from, at));
+        edge.data({ status: statusAt(e, at),
+                    label: edge.data("half") === "b" ? "" : (live ? "⚠ " : "") + edgeLabel(e) });
+      });
+      cy.nodes().forEach(node => {
+        node.toggleClass("hidden", node.connectedEdges().every(edge => edge.hasClass("hidden")));
+      });
+      const found = new Set(matches(search.value).map(id => "n" + id));
+      cy.nodes().forEach(node => node.toggleClass("match", found.has(node.id())));
+    });
+    const shown = data.edges.filter(e => !cy.$("#e" + e.id).hasClass("hidden")).length;
+    const filtered = fType.value || fStatus.value || fClaim.value;
+    document.getElementById("count").textContent = filtered || shown < data.edges.length
+      ? `${shown} di ${data.edges.length} affermazioni` : `${data.edges.length} affermazioni`;
+
+    if (selected && selected.hasClass("hidden")) { selected = null; cy.elements().unselect(); }
+    if (!selected) showProfile();
+    else if (selected.isEdge() || selected.data("claim")) showEdge(byId[selected.data("eid")]);
+    else showNode(selected);
+    applyFocus();
+  }
+
+  // Tutti gli elementi grafici di un'asserzione (le due metà, il nodo-tesi, le linee «sostiene»)
+  // con i loro estremi.
+  const partsOf = id => {
+    const els = cy.elements(`[eid = ${id}]`);
+    return els.union(els.connectedNodes());
+  };
+
+  // Mette a fuoco la selezione: un'asserzione con chi la sostiene, chi la contesta e cosa
+  // la contraddice; oppure un nodo con tutte le asserzioni che lo toccano.
+  function applyFocus() {
+    cy.elements().removeClass("faded");
+    if (!selected) return;
+    let ids;
+    if (selected.isEdge() || selected.data("claim")) {
+      const e = byId[selected.data("eid")];
+      ids = [e.id, ...e.targeted_by.map(t => t.id), ...e.conflicts.map(c => c.id)];
+      if (e.object_assertion_id) ids.push(e.object_assertion_id);
+    } else {
+      ids = [...new Set(selected.connectedEdges().map(edge => edge.data("eid")))];
+    }
+    let focus = selected.union(selected.isNode() ? selected : selected.connectedNodes());
+    for (const id of ids) focus = focus.union(partsOf(id));
+    cy.elements().not(focus).addClass("faded");
+  }
+
+  cy.on("tap", "edge, node", ev => { selected = ev.target; render(); });
+  cy.on("tap", ev => { if (ev.target === cy) { selected = null; cy.elements().unselect(); render(); } });
+  slider.addEventListener("input", render);
+  for (const f of [fType, fStatus, fClaim]) f.addEventListener("change", render);
+  document.getElementById("f-reset").onclick = () => {
+    fType.value = fStatus.value = fClaim.value = search.value = "";
+    searchMsg.textContent = "";
+    render();
+  };
+  search.addEventListener("input", () => { searchMsg.textContent = ""; render(); });
+  // Invio (o la scelta dal menu) porta alla prima entità trovata e la apre nel pannello.
+  function goToSearch() {
+    const ids = matches(search.value);
+    if (!search.value.trim()) return;
+    if (!ids.length) { searchMsg.textContent = "Nessuna entità con questo nome."; return; }
+    const node = ids.map(id => cy.$("#n" + id)).find(n => !n.hasClass("hidden"));
+    if (!node) { searchMsg.textContent = "Trovata, ma nascosta dai filtri o dalla data scelta."; return; }
+    searchMsg.textContent = ids.length > 1 ? `${ids.length} entità trovate: le altre sono evidenziate.` : "";
+    cy.elements().unselect();
+    selected = node.select();
+    render();
+    cy.animate({ center: { eles: node }, zoom: Math.max(cy.zoom(), 1.2) }, { duration: 300 });
+  }
+  search.addEventListener("keydown", ev => { if (ev.key === "Enter") goToSearch(); });
+  search.addEventListener("change", goToSearch);
+  // Un clic su una voce «Da approfondire» porta all'affermazione, nella vista di oggi.
+  detail.addEventListener("click", ev => {
+    const link = ev.target.closest("[data-eid]");
+    if (!link) return;
+    ev.preventDefault();
+    slider.value = data.dates.length;
+    fType.value = fStatus.value = fClaim.value = "";
+    selected = cy.$("#e" + link.dataset.eid);
+    render();
+  });
+  try {
+    const keep = sessionStorage.getItem("mavi-select");
+    sessionStorage.removeItem("mavi-select");
+    if (keep && cy.$("#" + keep).length) selected = cy.$("#" + keep);
+  } catch (e) {}
+  render();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAVI · revisione</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #dcd8cf;
+    --certa: #1f7a4d; --smentita: #b3261e; --warn-bg: #fbeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 10px 16px;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .08em; }
+  header span { color: var(--muted); }
+  header a { margin-left: auto; color: inherit; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-bottom: 20px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 3px; }
+  input, select, textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); }
+  textarea { resize: vertical; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
+  button { font: inherit; padding: 6px 14px; border-radius: 4px; border: 1px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--ink); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .muted { color: var(--muted); }
+  .card { border: 1px solid var(--line); border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+  .card.stance { border-left: 4px solid var(--ink, #1d1d1b); }
+  .card .target { margin: 0 0 8px; }
+  .card .src { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .warn { background: var(--warn-bg); border-left: 3px solid var(--smentita); padding: 6px 10px; margin-bottom: 10px; font-size: 14px; }
+  .warn p { margin: 2px 0; }
+  .tag { font-size: 12px; margin-left: 4px; text-transform: none; letter-spacing: 0; }
+  .tag.new { color: var(--smentita); } .tag.old { color: var(--certa); }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .error { color: var(--smentita); }
+  #status { margin-left: 10px; }
+</style>
+</head>
+<body>
+<header><h1>MAVI</h1><span id="clone"></span><a href="./">← Torna al grafo</a></header>
+<main>
+  <section>
+    <h2>Aggiungi un testo</h2>
+    <p class="muted">Incolla un articolo o un documento. Il modello propone le affermazioni; nulla entra
+       nel grafo finché non lo approvi qui sotto.</p>
+    <div class="grid">
+      <div><label for="titolo">Titolo della fonte *</label><input id="titolo" placeholder="es. Reuters, «Nestlé ritira…»"></div>
+      <div><label for="tipo">Tipo di fonte</label>
+        <select id="tipo"><option>articolo</option><option>comunicato</option><option>dichiarazione</option>
+          <option>intervista</option><option>rapporto</option><option>sentenza</option><option>altro</option></select></div>
+      <div><label for="data">Data della fonte</label><input id="data" placeholder="es. 2026-09-17 o 17/09/2026"></div>
+      <div><label for="url">Indirizzo web</label><input id="url" placeholder="https://…"></div>
+      <div><label for="voce">Chi parla <span class="tag" id="voce-tag"></span></label>
+        <input id="voce" list="entita" placeholder="lascia vuoto se è un resoconto"></div>
+      <div><label for="tipo_voce">Tipo di chi parla</label><select id="tipo_voce"></select></div>
+    </div>
+    <label for="testo">Testo *</label>
+    <textarea id="testo" rows="10"></textarea>
+    <p class="actions"><button id="estrai">Estrai le affermazioni</button><span id="status" class="muted"></span></p>
+  </section>
+
+  <section id="schema-section" hidden>
+    <h2>Nuove relazioni proposte <span id="schema-count" class="muted"></span></h2>
+    <p class="muted">Il modello ha trovato fatti che nessuna relazione della scheda descrive. Se una relazione ti
+       sembra utile, correggila se serve e approvala: entra nella scheda del clone e i suoi esempi diventano
+       proposte normali. Se la scarti, spariscono anche i suoi esempi.</p>
+    <div id="schema"></div>
+  </section>
+
+  <section>
+    <h2>Proposte in attesa <span id="count" class="muted"></span></h2>
+    <p class="muted">Correggi i campi se serve, poi approva o scarta. Un'asserzione approvata entra come
+       «da verificare»: dice che la fonte lo afferma, non che sia vero.</p>
+    <p class="actions muted">Manca un tipo di entità (es. «organizzazione»)?
+      <input id="nuovo-tipo" placeholder="nome del tipo" style="max-width:220px">
+      <button class="secondary" id="aggiungi-tipo">Aggiungi alla scheda</button>
+      <span class="error" id="tipo-errore"></span></p>
+    <div id="queue"></div>
+  </section>
+</main>
+<datalist id="entita"></datalist>
+
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let profile, known = new Set();
+
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} :
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+
+// Se il valore proposto non è tra le scelte lo si aggiunge, invece di sostituirlo di nascosto.
+const options = (list, selected) => (selected && !list.includes(selected) ? [...list, selected] : list).map(v =>
+  `<option ${v === selected ? "selected" : ""}>${esc(v)}</option>`).join("");
+
+// Segnala se un nome corrisponde a un'entità già nel grafo (nome o alias, senza badare alle maiuscole).
+function tagFor(input, tag) {
+  const isOld = known.has(input.value.trim().toLowerCase());
+  tag.textContent = !input.value.trim() ? "" : isOld ? "già nel grafo" : "nuova: scegli il tipo";
+  tag.className = "tag " + (isOld ? "old" : "new");
+}
+
+async function loadGraph() {
+  const g = await api("/api/graph");
+  profile = g.profile;
+  document.getElementById("clone").textContent = profile.nome;
+  known = new Set(g.nodes.flatMap(n => [n.label, ...n.aliases]).map(s => s.toLowerCase()));
+  document.getElementById("entita").innerHTML =
+    g.nodes.map(n => `<option value="${esc(n.label)}">`).join("");
+  const tipoVoce = document.getElementById("tipo_voce");
+  tipoVoce.innerHTML = options(profile.tipi_entita, tipoVoce.value || "persona");
+  tagFor(document.getElementById("voce"), document.getElementById("voce-tag"));
+}
+
+// Presa di posizione su un'affermazione (es. «contesta»): il bersaglio è fisso, il resto si corregge.
+function stanceCard(p) {
+  const d = p.data;
+  const relations = profile.relazioni.filter(r => r.oggetto === "affermazione").map(r => r.nome);
+  const claimTypes = ["documentato", "interpretazione", "ipotesi", "inferenza"];
+  const el = document.createElement("div");
+  el.className = "card stance";
+  if (d.bersaglio_proposta) el.dataset.target = d.bersaglio_proposta;
+  el.innerHTML = `
+    <div class="src">Fonte: ${esc(p.source_label)}${p.source_date ? " · " + esc(p.source_date) : ""}</div>
+    ${p.warnings.length ? `<div class="warn">${p.warnings.map(w => `<p>⚠ ${esc(w)}</p>`).join("")}</div>` : ""}
+    <p class="target"><span class="muted">Si pronuncia su:</span> <strong>${esc(d.bersaglio)}</strong></p>
+    <div class="grid">
+      <div><label>Chi si pronuncia <span class="tag" data-tag="soggetto"></span></label>
+           <input name="soggetto" list="entita" value="${esc(d.soggetto)}"></div>
+      <div><label>Tipo</label><select name="tipo_soggetto">${options(profile.tipi_entita, d.tipo_soggetto)}</select></div>
+      <div><label>Relazione</label><select name="relazione">${options(relations, d.relazione)}</select></div>
+      <div><label>Tipo di affermazione</label><select name="tipo_affermazione">${options(claimTypes, d.tipo_affermazione)}</select></div>
+      <div><label>Data</label><input name="data" value="${esc(d.data)}" placeholder="es. 2013-02-14"></div>
+    </div>
+    <label>Estratto</label><textarea name="estratto" rows="2">${esc(d.estratto)}</textarea>
+    <p class="actions"><button data-act="approve">Approva</button>
+       <button class="secondary" data-act="reject">Scarta</button><span class="error"></span></p>`;
+  const input = el.querySelector("[name=soggetto]"), tag = el.querySelector("[data-tag=soggetto]");
+  input.addEventListener("input", () => tagFor(input, tag));
+  tagFor(input, tag);
+  bindActions(el, p);
+  return el;
+}
+
+function bindActions(el, p) {
+  const error = el.querySelector(".error");
+  el.querySelector("[data-act=approve]").onclick = async () => {
+    const fields = Object.fromEntries([...el.querySelectorAll("[name]")].map(f => [f.name, f.value]));
+    try { await api(`/api/proposals/${p.id}/approve`, fields); el.remove(); await loadGraph(); updateCount(); }
+    catch (e) { error.textContent = e.message; }
+  };
+  // Scartare un'affermazione scarta anche le prese di posizione su di essa.
+  el.querySelector("[data-act=reject]").onclick = async () => {
+    try {
+      await api(`/api/proposals/${p.id}/reject`, {});
+      el.remove();
+      document.querySelectorAll(`#queue [data-target="${p.id}"]`).forEach(x => x.remove());
+      updateCount();
+    }
+    catch (e) { error.textContent = e.message; }
+  };
+}
+
+function card(p) {
+  const d = p.data;
+  if (d.bersaglio) return stanceCard(p);
+  const relations = profile.relazioni.filter(r => (r.oggetto || "entita") === "entita").map(r => r.nome);
+  if (d.relazione && !relations.includes(d.relazione)) relations.push(d.relazione);   // relazione proposta
+  const claimTypes = ["documentato", "interpretazione", "ipotesi", "inferenza"];
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `
+    <div class="src">Fonte: ${esc(p.source_label)}${p.source_date ? " · " + esc(p.source_date) : ""}</div>
+    ${p.warnings.length ? `<div class="warn">${p.warnings.map(w => `<p>⚠ ${esc(w)}</p>`).join("")}</div>` : ""}
+    <div class="grid">
+      <div><label>Soggetto <span class="tag" data-tag="soggetto"></span></label>
+           <input name="soggetto" list="entita" value="${esc(d.soggetto)}"></div>
+      <div><label>Tipo del soggetto</label><select name="tipo_soggetto">${options(profile.tipi_entita, d.tipo_soggetto)}</select></div>
+      <div><label>Relazione</label><select name="relazione">${options(relations, d.relazione)}</select></div>
+      <div><label>Oggetto <span class="tag" data-tag="oggetto"></span></label>
+           <input name="oggetto" list="entita" value="${esc(d.oggetto)}"></div>
+      <div><label>Tipo dell'oggetto</label><select name="tipo_oggetto">${options(profile.tipi_entita, d.tipo_oggetto)}</select></div>
+      <div><label>Tipo di affermazione</label><select name="tipo_affermazione">${options(claimTypes, d.tipo_affermazione)}</select></div>
+      <div><label>Data del fatto</label><input name="data" value="${esc(d.data)}" placeholder="es. 2013-02-18"></div>
+      <div><label>Valore</label><input name="valore" value="${esc(d.valore)}" placeholder="es. 29 % o 60-100 %"></div>
+      <div><label>Chi lo dice nel testo <span class="tag" data-tag="voce"></span></label>
+           <input name="voce" list="entita" value="${esc(d.voce)}" placeholder="vuoto se lo riporta il testo stesso"></div>
+      <div><label>Tipo di chi lo dice</label><select name="tipo_voce">${options(["", ...profile.tipi_entita], d.tipo_voce || "")}</select></div>
+    </div>
+    <label>Estratto</label><textarea name="estratto" rows="2">${esc(d.estratto)}</textarea>
+    <p class="actions"><button data-act="approve">Approva</button>
+       <button class="secondary" data-act="reject">Scarta</button><span class="error"></span></p>`;
+
+  for (const side of ["soggetto", "oggetto", "voce"]) {
+    const input = el.querySelector(`[name=${side}]`), tag = el.querySelector(`[data-tag=${side}]`);
+    input.addEventListener("input", () => tagFor(input, tag));
+    tagFor(input, tag);
+  }
+  bindActions(el, p);
+  return el;
+}
+
+function updateCount() {
+  const n = document.querySelectorAll("#queue .card").length;
+  document.getElementById("count").textContent = `(${n})`;
+  if (!n) document.getElementById("queue").innerHTML = '<p class="muted">Nessuna proposta in attesa.</p>';
+}
+
+function schemaCard(sp) {
+  const d = sp.data;
+  const el = document.createElement("div");
+  el.className = "card";
+  el.innerHTML = `
+    <div class="src">Dal testo: ${esc(sp.source_label)}</div>
+    <div class="grid">
+      <div><label>Nome della relazione</label><input name="nome" value="${esc(d.nome)}"></div>
+      <div><label>Soggetto: tipi ammessi</label><input name="da" value="${esc(d.da.join(", "))}"
+           placeholder="separati da virgole"></div>
+      <div><label>Oggetto: tipi ammessi</label><input name="a" value="${esc(d.a.join(", "))}"
+           placeholder="separati da virgole"></div>
+    </div>
+    <label>Definizione</label><textarea name="definizione" rows="2">${esc(d.definizione)}</textarea>
+    <p class="muted" style="margin:8px 0 4px">Tipi già nella scheda: ${esc(profile.tipi_entita.join(", "))}.
+       Un tipo nuovo viene aggiunto alla scheda insieme alla relazione.</p>
+    ${sp.esempi.length ? `<label style="margin-top:10px">Esempi dal testo</label><ul>${sp.esempi.map(e =>
+        `<li><strong>${esc(e.soggetto)}</strong> → <strong>${esc(e.oggetto)}</strong>
+         <span class="muted">«${esc(e.estratto)}»</span></li>`).join("")}</ul>` : ""}
+    <p class="actions"><button data-act="approve">Aggiungi alla scheda</button>
+       <button class="secondary" data-act="reject">Scarta</button><span class="error"></span></p>`;
+  const error = el.querySelector(".error");
+  const val = n => el.querySelector(`[name=${n}]`).value;
+  el.querySelector("[data-act=approve]").onclick = async () => {
+    try {
+      await api(`/api/schema_proposals/${sp.id}/approve`,
+                { nome: val("nome"), definizione: val("definizione"), da: val("da"), a: val("a") });
+      await refresh();
+    } catch (e) { error.textContent = e.message; }
+  };
+  el.querySelector("[data-act=reject]").onclick = async () => {
+    try { await api(`/api/schema_proposals/${sp.id}/reject`, {}); await refresh(); }
+    catch (e) { error.textContent = e.message; }
+  };
+  return el;
+}
+
+async function loadSchema() {
+  const list = await api("/api/schema_proposals");
+  const box = document.getElementById("schema");
+  box.innerHTML = "";
+  for (const sp of list) box.append(schemaCard(sp));
+  document.getElementById("schema-count").textContent = `(${list.length})`;
+  document.getElementById("schema-section").hidden = !list.length;
+}
+
+async function refresh() {
+  await loadGraph();
+  await loadSchema();
+  await loadQueue();
+}
+
+async function loadQueue() {
+  const queue = document.getElementById("queue");
+  queue.innerHTML = "";
+  for (const p of await api("/api/proposals")) queue.append(card(p));
+  updateCount();
+}
+
+document.getElementById("voce").addEventListener("input", e =>
+  tagFor(e.target, document.getElementById("voce-tag")));
+
+document.getElementById("estrai").onclick = async () => {
+  const btn = document.getElementById("estrai"), status = document.getElementById("status");
+  const val = id => document.getElementById(id).value.trim();
+  btn.disabled = true;
+  status.className = "muted";
+  status.textContent = "Estrazione in corso… con un modello locale può servire qualche minuto.";
+  try {
+    const r = await api("/api/extract", { titolo: val("titolo"), tipo: val("tipo"), data: val("data"),
+      url: val("url"), voce: val("voce"), tipo_voce: val("tipo_voce"), testo: val("testo") });
+    status.textContent = `${r.proposte} proposte aggiunte alla coda.`;
+    document.getElementById("testo").value = "";
+    await refresh();
+  } catch (e) {
+    status.className = "error";
+    status.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+document.getElementById("aggiungi-tipo").onclick = async () => {
+  const input = document.getElementById("nuovo-tipo"), error = document.getElementById("tipo-errore");
+  try {
+    await api("/api/profile/types", { nome: input.value });
+    input.value = ""; error.textContent = "";
+    await refresh();
+  } catch (e) { error.textContent = e.message; }
+};
+
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "fornitore": "groq",
+  "fornitori": {
+    "groq": {
+      "tipo": "openai",
+      "indirizzo": "https://api.groq.com/openai/v1",
+      "modello": "openai/gpt-oss-120b",
+      "chiave": ""
+    },
+    "ollama": {
+      "tipo": "ollama",
+      "indirizzo": "http://localhost:11434",
+      "modello": "qwen2.5:7b"
+    },
+    "gemma": {
+      "tipo": "ollama",
+      "indirizzo": "http://localhost:11434",
+      "modello": "gemma3:4b"
+    }
+  }
+}
