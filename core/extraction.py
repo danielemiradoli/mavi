@@ -30,6 +30,7 @@ Senza impostazioni.json si usa Gemma 3 4B in locale.
 import json
 import re
 import sqlite3
+import time
 import urllib.error
 import urllib.request
 
@@ -261,6 +262,19 @@ def post(url, body, headers=None):
         return json.loads(r.read())
 
 
+def post_patient(url, body, headers=None, tries=3):
+    """Come post, ma se il servizio risponde «troppe richieste» (429) aspetta e riprova:
+    i piani gratuiti hanno un limite di parole al minuto, e i testi lunghi lo superano."""
+    for attempt in range(tries):
+        try:
+            return post(url, body, headers)
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == tries - 1:
+                raise
+            wait = e.headers.get("retry-after") if e.headers else None
+            time.sleep(min(float(wait) if wait and wait.replace(".", "", 1).isdigit() else 20, 60))
+
+
 def ask_model(system, user, schema, prov=None):
     """Chiede al modello le asserzioni. Restituisce il JSON della risposta."""
     prov = prov or provider()
@@ -280,13 +294,13 @@ def ask_model(system, user, schema, prov=None):
                 "response_format": {"type": "json_schema",
                                     "json_schema": {"name": "affermazioni", "schema": schema}}}
         try:
-            reply = post(url, body, headers)
+            reply = post_patient(url, body, headers)
         except urllib.error.HTTPError as e:
             if e.code != 400:
                 raise
             # Alcuni modelli non accettano lo schema: si ripiega sul semplice formato JSON.
             body["response_format"] = {"type": "json_object"}
-            reply = post(url, body, headers)
+            reply = post_patient(url, body, headers)
         return parse_json(reply["choices"][0]["message"]["content"])
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", "replace")[:300]

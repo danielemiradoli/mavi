@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAVI · cerca fonti</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #dcd8cf;
+    --certa: #1f7a4d; --smentita: #b3261e; --warn-bg: #fbeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: baseline; gap: 12px; padding: 10px 16px; flex-wrap: wrap;
+           border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .08em; }
+  header span { color: var(--muted); }
+  header nav { margin-left: auto; display: flex; gap: 16px; }
+  header a { color: inherit; }
+  main { max-width: 980px; margin: 0 auto; padding: 16px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-bottom: 20px; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  input[type=search] { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; }
+  button { font: inherit; padding: 6px 14px; border-radius: 4px; border: 1px solid var(--ink); background: var(--ink); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--ink); }
+  button.chip { background: #fff; color: var(--ink); border-color: var(--line); border-radius: 14px; padding: 3px 12px; font-size: 14px; text-align: left; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+  .connectors label { display: inline-flex; gap: 6px; align-items: center; margin-right: 18px; }
+  .connectors .off { color: var(--muted); }
+  .result { display: grid; grid-template-columns: 24px 1fr; gap: 4px 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .result:first-child { border-top: 0; }
+  .result h3 { font-size: 15px; margin: 0; font-weight: 600; }
+  .result h3 a { color: inherit; }
+  .result .meta { font-size: 13px; color: var(--muted); }
+  .result .snippet { font-size: 14px; margin: 2px 0 0; }
+  .result.done { opacity: .55; }
+  .state { font-size: 13px; }
+  .state.ok { color: var(--certa); } .state.err { color: var(--smentita); }
+  .badge { display: inline-block; font-size: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px; margin-right: 6px; }
+  .errors { background: var(--warn-bg); border-left: 3px solid var(--smentita); padding: 6px 10px; font-size: 14px; }
+  #bar { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 16px;
+         display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<header><h1>MAVI</h1><span id="clone"></span>
+  <nav><a href="./">Grafo</a><a href="revisione.html">Coda di revisione</a></nav></header>
+<main>
+  <section>
+    <h2>Cerca fonti</h2>
+    <p class="muted">MAVI non risponde al posto tuo: ti aiuta a trovare cosa leggere. Cerca su più fonti aperte,
+       scegli i testi che ti interessano e mandali alla coda di revisione: il modello ne estrae le affermazioni
+       e tu decidi cosa entra nel grafo.</p>
+    <form id="form" class="row">
+      <input type="search" id="q" placeholder="Che cosa vuoi capire? Un nome, un evento, una domanda…" style="flex:1; min-width:240px">
+      <button id="go">Cerca</button>
+    </form>
+    <div id="spunti" class="row"></div>
+    <div id="connectors" class="connectors"></div>
+  </section>
+
+  <section id="results-section" hidden>
+    <h2>Risultati <span id="count" class="muted"></span></h2>
+    <div id="errors"></div>
+    <div id="results"></div>
+  </section>
+</main>
+<div id="bar" hidden>
+  <button id="add">Manda alla coda di revisione</button>
+  <span id="progress" class="muted"></span>
+</div>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || `Errore ${r.status}`);
+  return data;
+}
+
+let read = new Set(), results = [];
+const q = document.getElementById("q");
+
+(async () => {
+  const info = await api("/api/sources");
+  document.getElementById("clone").textContent = info.nome;
+  read = new Set(info.gia_lette);
+  document.getElementById("connectors").innerHTML = info.fonti.map(f => `
+    <label class="${f.attiva ? "" : "off"}" title="${esc(f.descrizione)}">
+      <input type="checkbox" value="${f.id}" ${f.attiva ? "checked" : "disabled"}> ${esc(f.nome)}
+      ${f.attiva ? "" : `<span class="muted">(serve la chiave)</span>`}</label>`).join("");
+  // Spunti: il nome del clone e le sue domande guida, da cui partire o da riformulare.
+  const spunti = [info.nome, ...info.domande];
+  document.getElementById("spunti").innerHTML = `<span class="muted">Spunti:</span>` +
+    spunti.map(s => `<button type="button" class="chip">${esc(s)}</button>`).join("");
+  document.querySelectorAll("#spunti .chip").forEach(b => b.onclick = () => { q.value = b.textContent; q.focus(); });
+})();
+
+document.getElementById("form").onsubmit = async ev => {
+  ev.preventDefault();
+  const which = [...document.querySelectorAll("#connectors input:checked")].map(i => i.value);
+  if (!q.value.trim()) return;
+  const go = document.getElementById("go");
+  go.disabled = true; go.textContent = "Cerco…";
+  try {
+    const r = await api("/api/sources/search", { domanda: q.value, fonti: which });
+    results = r.risultati;
+    show(r.errori);
+  } catch (e) {
+    document.getElementById("errors").innerHTML = `<p class="errors">${esc(e.message)}</p>`;
+    document.getElementById("results-section").hidden = false;
+  } finally { go.disabled = false; go.textContent = "Cerca"; }
+};
+
+function show(errors) {
+  document.getElementById("results-section").hidden = false;
+  document.getElementById("count").textContent = `(${results.length})`;
+  document.getElementById("errors").innerHTML = Object.keys(errors).length ? `<p class="errors">` +
+    Object.entries(errors).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join("<br>") + `</p>` : "";
+  document.getElementById("results").innerHTML = results.length ? results.map((r, i) => {
+    const done = read.has(r.url);
+    return `<div class="result ${done ? "done" : ""}" data-i="${i}">
+      <input type="checkbox" ${done ? "disabled" : ""}>
+      <div><h3><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.titolo)}</a></h3>
+        <div class="meta"><span class="badge">${esc(r.tipo)}</span>${esc(r.fonte)}${r.data ? " · " + esc(r.data) : ""}
+          ${done ? " · <strong>già nell'archivio</strong>" : ""}</div>
+        ${r.estratto ? `<p class="snippet">${esc(r.estratto)}</p>` : ""}
+        <div class="state"></div></div></div>`;
+  }).join("") : `<p class="muted">Nessun risultato. Prova con parole diverse, o in inglese.</p>`;
+  document.querySelectorAll(".result input").forEach(c => c.onchange = updateBar);
+  updateBar();
+}
+
+function updateBar() {
+  const n = document.querySelectorAll(".result input:checked").length;
+  const add = document.getElementById("add");
+  document.getElementById("bar").hidden = !n && !document.getElementById("progress").textContent;
+  add.hidden = !n;
+  add.textContent = `Manda alla coda di revisione (${n})`;
+}
+
+// Un testo alla volta: il modello gratuito ha un limite di parole al minuto.
+document.getElementById("add").onclick = async () => {
+  const add = document.getElementById("add"), progress = document.getElementById("progress");
+  const chosen = [...document.querySelectorAll(".result input:checked")].map(c => c.closest(".result"));
+  add.disabled = true;
+  let total = 0;
+  for (const [k, el] of chosen.entries()) {
+    const r = results[el.dataset.i], state = el.querySelector(".state");
+    progress.textContent = `Leggo ${k + 1} di ${chosen.length}: «${r.titolo}»… (un testo lungo richiede qualche minuto)`;
+    state.className = "state muted"; state.textContent = "In lettura…";
+    try {
+      const out = await api("/api/sources/add", r);
+      total += out.proposte;
+      state.className = "state ok";
+      state.textContent = `${out.proposte} ${out.proposte === 1 ? "proposta" : "proposte"} in coda` +
+        (out.troncato_da ? ` · letti i primi ${out.caratteri.toLocaleString("it")} caratteri su ${out.troncato_da.toLocaleString("it")}` : "");
+      read.add(r.url);
+      el.classList.add("done");
+      el.querySelector("input").checked = false;
+      el.querySelector("input").disabled = true;
+    } catch (e) {
+      state.className = "state err"; state.textContent = e.message;
+    }
+  }
+  add.disabled = false;
+  progress.innerHTML = `Fatto: ${total} ${total === 1 ? "proposta" : "proposte"} in coda. <a href="revisione.html">Vai alla revisione →</a>`;
+  updateBar();
+};
+</script>
+</body>
+</html>

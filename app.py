@@ -9,7 +9,7 @@ import os
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from core import extraction
+from core import extraction, sources
 from core.database import (ROOT, change_status, connect, create_clone, graph, list_clones,
                            merge_entities, read_profile, retract, validate_profile)
 
@@ -150,6 +150,51 @@ def api_extract(payload: dict = Body(...)):
         n = extraction.extract(conn, CLONE, text, label, payload.get("tipo"), payload.get("data"),
                                payload.get("url"), payload.get("voce"), payload.get("tipo_voce"))
         return {"proposte": n}
+    except ValueError as e:
+        conn.rollback()
+        raise HTTPException(400, str(e))
+    except extraction.ModelError as e:
+        conn.rollback()
+        raise HTTPException(502, str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/sources")
+def api_sources():
+    conn = connect(CLONE)
+    try:
+        profile = read_profile(CLONE)
+        known = [r[0] for r in conn.execute("SELECT url FROM sources WHERE url IS NOT NULL")]
+        return {"fonti": sources.available(), "nome": profile["nome"],
+                "domande": profile.get("domande", []), "gia_lette": known}
+    finally:
+        conn.close()
+
+
+@app.post("/api/sources/search")
+def api_sources_search(payload: dict = Body(...)):
+    query = (payload.get("domanda") or "").strip()
+    if not query:
+        raise HTTPException(400, "Scrivi che cosa cercare.")
+    results, errors = sources.search(query, payload.get("fonti") or ["wikipedia"])
+    return {"risultati": results, "errori": errors}
+
+
+@app.post("/api/sources/add")
+def api_sources_add(item: dict = Body(...)):
+    """Legge il testo completo di un risultato e lo manda all'estrazione: le proposte vanno in coda."""
+    if not item.get("url") or not item.get("titolo"):
+        raise HTTPException(400, "Risultato incompleto.")
+    try:
+        text, full = sources.fetch_text(item)
+    except sources.SourceError as e:
+        raise HTTPException(502, f"«{item['titolo']}»: {e}")
+    conn = connect(CLONE)
+    try:
+        label = f'{item["titolo"]} ({item.get("fonte", "web")})'
+        n = extraction.extract(conn, CLONE, text, label, item.get("tipo"), item.get("data") or None, item["url"])
+        return {"proposte": n, "troncato_da": full, "caratteri": len(text)}
     except ValueError as e:
         conn.rollback()
         raise HTTPException(400, str(e))

@@ -50,6 +50,22 @@ la scheda (tipi di entità e relazioni), la correggi e crei il clone.
 Il pannello iniziale del grafo elenca cosa merita attenzione: conflitti aperti, contestazioni senza
 esito, affermazioni con una sola fonte, interpretazioni senza voce. Un clic porta all'affermazione.
 
+## Cerca fonti
+
+«Cerca fonti» (in alto nel grafo) cerca su più fonti aperte insieme: scrivi che cosa vuoi capire, oppure
+parti da uno spunto (il nome del clone e le sue domande guida), scegli i risultati che ti interessano e
+mandali alla coda di revisione. MAVI legge il testo completo, il modello ne estrae le affermazioni e tu
+decidi cosa entra nel grafo. MAVI non risponde al posto tuo: ti aiuta a trovare cosa leggere e su cosa ragionare.
+
+- **Wikipedia** (italiano e inglese) e **GDELT** (notizie da tutto il mondo, ultimi tre mesi circa): senza chiave.
+- **Web (Tavily)**: articoli, documenti e siti ufficiali. Chiave gratuita su https://app.tavily.com
+  (1000 ricerche al mese, senza carta di credito).
+- **OpenAlex**: articoli scientifici (solo il riassunto). Chiave gratuita su https://openalex.org.
+
+Le chiavi vanno in `impostazioni.json`, nella sezione `"fonti"` (vedi `impostazioni.esempio.json`).
+Di ogni testo si leggono al massimo i primi 15.000 caratteri; un testo lungo richiede qualche minuto,
+perché il modello gratuito ha un limite di parole al minuto e MAVI aspetta quando lo raggiunge.
+
 ## Cerca e filtra
 
 Sotto la barra del tempo: scrivi il nome di un'entità (vale anche un nome alternativo) e premi Invio

@@ -17,5 +17,15 @@
       "indirizzo": "http://localhost:11434",
       "modello": "gemma3:4b"
     }
+  },
+  "fonti": {
+    "tavily": {
+      "chiave": "",
+      "nota": "gratuita su https://app.tavily.com (1000 ricerche al mese, senza carta)"
+    },
+    "openalex": {
+      "chiave": "",
+      "nota": "gratuita su https://openalex.org (articoli scientifici)"
+    }
   }
 }

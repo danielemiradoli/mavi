@@ -549,4 +549,29 @@ assert any("5 %" in v["testo"] and "60–100 %" in v["testo"] for v in weak["Val
 conn.close()
 ok("i valori numerici si leggono anche in italiano («tra il 60 e il 100 %»), si estraggono e i discordanti emergono")
 
+# 28. Fonti aperte: i risultati di ogni servizio diventano voci uniformi, i testi lunghi si troncano
+from core import sources
+wiki = sources.parse_wikipedia({"query": {"search": [{"title": "Scandalo della carne di cavallo",
+                                                      "snippet": "lo <span class=\"m\">scandalo</span>", "timestamp": "2026-10-01T10:00:00Z"}]}}, "it")
+assert wiki[0]["url"] == "https://it.wikipedia.org/wiki/Scandalo_della_carne_di_cavallo"
+assert wiki[0]["estratto"] == "lo scandalo…" and wiki[0]["data"] == "2026-10-01"
+news = sources.parse_gdelt({"articles": [{"url": "https://x.it/a", "title": "T", "seendate": "20260917T120000Z", "domain": "x.it"}]})
+assert news[0]["data"] == "2026-09-17" and news[0]["tipo"] == "notizia"
+web = sources.parse_tavily({"results": [{"title": "T", "url": "https://www.bbc.com/n", "content": "c", "published_date": None}]})
+assert web[0]["fonte"] == "Web · www.bbc.com" and web[0]["data"] == ""
+paper = sources.parse_openalex({"results": [{"display_name": "Food fraud", "doi": "https://doi.org/10.1/x",
+                                             "publication_year": 2019, "abstract_inverted_index": {"fraud": [1], "Food": [0]}}]})
+assert paper[0]["testo"] == "Food fraud" and paper[0]["data"] == "2019"
+real_http = sources.http
+sources.http = lambda url, *a, **k: {"query": {"pages": {"1": {"extract": "Intro.\n\n== Storia ==\nNel 2013."}}}}
+assert sources.fetch_wikipedia("https://it.wikipedia.org/wiki/Prova") == "Intro.\n\nStoria\n\nNel 2013."
+sources.http = real_http
+long_text = ("Paragrafo di prova. " * 40 + "\n\n") * 40
+text, full = sources.fetch_text({"url": "https://doi.org/x", "testo": long_text})
+assert len(text) <= sources.MAX_TEXT and full == len(long_text) and text.endswith("prova. ")
+assert sources.fetch_text({"url": "u", "testo": "breve"}) == ("breve", None)
+_, errors = sources.search("x", ["tavily"]) if not sources.keys().get("tavily", {}).get("chiave") else ([], {"Web (Tavily)": "-"})
+assert "Web (Tavily)" in errors                            # senza chiave la fonte si segnala, non blocca
+ok("le fonti aperte (Wikipedia, GDELT, web, OpenAlex) danno risultati uniformi e i testi lunghi si troncano")
+
 print("\nTutti i controlli superati.")
